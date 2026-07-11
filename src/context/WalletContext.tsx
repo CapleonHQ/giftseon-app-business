@@ -49,6 +49,8 @@ type WalletContextValue = {
   setBudgetCap: (amount: number, period: 'monthly' | 'annual') => void
   setLowBalanceThreshold: (amount: number) => void
   setSpendLimit: (typeKey: string, maxPerGift: number) => void
+  setSpendLimits: (limits: { typeKey: string; label: string; maxPerGift: number }[]) => void
+  recordGiftSpend: (description: string, amount: number) => { success: boolean; reason?: string }
 }
 
 const WalletContext = createContext<WalletContextValue | undefined>(undefined)
@@ -85,9 +87,49 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
     setSpendLimits((prev) => prev.map((s) => (s.typeKey === typeKey ? { ...s, maxPerGift } : s)))
   }, [])
 
+  const setSpendLimitsBulk = useCallback((limits: { typeKey: string; label: string; maxPerGift: number }[]) => {
+    setSpendLimits((prev) => {
+      const next = [...prev]
+      limits.forEach((limit) => {
+        const idx = next.findIndex((s) => s.typeKey === limit.typeKey)
+        if (idx >= 0) next[idx] = { ...next[idx], maxPerGift: limit.maxPerGift }
+        else next.push(limit)
+      })
+      return next
+    })
+  }, [])
+
+  const recordGiftSpend = useCallback((description: string, amount: number) => {
+    let result: { success: boolean; reason?: string } = { success: true }
+    setWallet((prev) => {
+      if (amount > prev.available) {
+        result = { success: false, reason: `Insufficient budget: this gift needs ₦${amount.toLocaleString()} but only ₦${prev.available.toLocaleString()} is available.` }
+        return prev
+      }
+      return { ...prev, available: prev.available - amount, spent: prev.spent + amount }
+    })
+    if (result.success) {
+      setTransactions((prev) => [
+        { id: `tx-${txCounter++}`, date: 'Just now', description, type: 'Debit', amount, status: 'Completed' },
+        ...prev,
+      ])
+    }
+    return result
+  }, [])
+
   const value = useMemo(
-    () => ({ wallet, transactions, spendLimits, topUp, setBudgetCap, setLowBalanceThreshold, setSpendLimit }),
-    [wallet, transactions, spendLimits, topUp, setBudgetCap, setLowBalanceThreshold, setSpendLimit]
+    () => ({
+      wallet,
+      transactions,
+      spendLimits,
+      topUp,
+      setBudgetCap,
+      setLowBalanceThreshold,
+      setSpendLimit,
+      setSpendLimits: setSpendLimitsBulk,
+      recordGiftSpend,
+    }),
+    [wallet, transactions, spendLimits, topUp, setBudgetCap, setLowBalanceThreshold, setSpendLimit, setSpendLimitsBulk, recordGiftSpend]
   )
 
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>

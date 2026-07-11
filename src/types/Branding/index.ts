@@ -3,4 +3,5 @@ export interface BrandingConfig {
   brandColor: string
   messageTemplate: string
   wrapperStyle: string
+  brandAllItems: boolean
 }

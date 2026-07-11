@@ -15,6 +15,7 @@ const DEFAULT_BRANDING: BrandingConfig = {
   brandColor: '#1A1ABC',
   messageTemplate: 'Happy Birthday, {{employeeName}}! From all of us at Acme. 🎉',
   wrapperStyle: 'classic',
+  brandAllItems: true,
 }
 
 type BrandingContextValue = {

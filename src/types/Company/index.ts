@@ -1,8 +1,11 @@
+export type CompanyPlan = 'Starter' | 'Growth' | 'Enterprise'
+
 export interface CompanyProfile {
   id: string
   companyName: string
   businessType?: string
   industry?: string
+  plan?: CompanyPlan
   adminFirstName: string
   adminLastName: string
   email: string

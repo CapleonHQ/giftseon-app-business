@@ -5,6 +5,7 @@ import { Gift, Clock, CheckCircle2, Wallet as WalletIcon, ArrowRight, Sparkles }
 import DashboardHeader from '@/components/Dashboard/DashboardHeader'
 import StatCard from '@/components/Dashboard/StatCard'
 import EmptyState from '@/components/Dashboard/EmptyState'
+import RequireEmployeesGate from '@/components/Dashboard/RequireEmployeesGate'
 import { useAuth } from '@/context/AuthContext'
 import { useGifting } from '@/context/GiftingContext'
 import { useEmployees } from '@/context/EmployeesContext'
@@ -40,7 +41,9 @@ export default function DashboardPage() {
     <div className='flex flex-col'>
       <DashboardHeader title='Dashboard' />
 
-      <div className='space-y-6 p-6 lg:p-8'>
+      <div className='p-6 lg:p-8'>
+      <RequireEmployeesGate pageLabel='Your dashboard'>
+      <div className='space-y-6'>
         {!hasGiftingConfigured && (
           <div className='flex flex-col items-start gap-4 rounded-xl border border-primary-100 bg-primary-50/40 p-5 sm:flex-row sm:items-center sm:justify-between'>
             <div className='flex items-start gap-3'>
@@ -123,6 +126,8 @@ export default function DashboardPage() {
             </Link>
           </div>
         </div>
+      </div>
+      </RequireEmployeesGate>
       </div>
     </div>
   )

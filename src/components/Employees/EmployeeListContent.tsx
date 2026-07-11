@@ -2,10 +2,12 @@
 
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { Search, SlidersHorizontal, Eye, ChevronLeft, ChevronRight, X, UserPlus } from 'lucide-react'
+import { Search, SlidersHorizontal, Eye, Gift, Trash2, ChevronLeft, ChevronRight, X, UserPlus } from 'lucide-react'
 import DashboardHeader from '@/components/Dashboard/DashboardHeader'
 import EmptyState from '@/components/Dashboard/EmptyState'
 import EmployeeProfileDrawer from './EmployeeProfileDrawer'
+import SendGiftModal from './SendGiftModal'
+import SuccessModal from '@/components/Profile/SuccessModal'
 import { useEmployees } from '@/context/EmployeesContext'
 import type { Employee } from '@/types/Employee'
 import { formatDate } from '@/lib/utils/dateTime'
@@ -19,7 +21,7 @@ const COMPLETION_STYLES: Record<string, string> = {
 
 export default function EmployeeListContent() {
   const router = useRouter()
-  const { employees } = useEmployees()
+  const { employees, removeEmployees } = useEmployees()
   const [searchQuery, setSearchQuery] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [showFilter, setShowFilter] = useState(false)
@@ -28,6 +30,12 @@ export default function EmployeeListContent() {
   const [openMenu, setOpenMenu] = useState<string | null>(null)
   const [activeEmployee, setActiveEmployee] = useState<Employee | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
+
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [sendGiftOpen, setSendGiftOpen] = useState(false)
+  const [sendGiftTargets, setSendGiftTargets] = useState<string[]>([])
+  const [removeTargets, setRemoveTargets] = useState<string[] | null>(null)
+  const [showRemoveSuccess, setShowRemoveSuccess] = useState(false)
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -63,6 +71,44 @@ export default function EmployeeListContent() {
       return value
     }
   }
+
+  const toggleAll = () => {
+    setSelectedIds((prev) => {
+      const pageIds = paginated.map((e) => e.id)
+      const allSelected = pageIds.every((id) => prev.has(id)) && pageIds.length > 0
+      const next = new Set(prev)
+      if (allSelected) pageIds.forEach((id) => next.delete(id))
+      else pageIds.forEach((id) => next.add(id))
+      return next
+    })
+  }
+
+  const toggleOne = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  const openSendGift = (ids: string[]) => {
+    setSendGiftTargets(ids)
+    setSendGiftOpen(true)
+  }
+
+  const confirmRemove = () => {
+    if (!removeTargets) return
+    removeEmployees(removeTargets)
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      removeTargets.forEach((id) => next.delete(id))
+      return next
+    })
+    setRemoveTargets(null)
+    setShowRemoveSuccess(true)
+  }
+
+  const allOnPageSelected = paginated.length > 0 && paginated.every((e) => selectedIds.has(e.id))
 
   return (
     <div className='flex flex-col'>
@@ -132,6 +178,13 @@ export default function EmployeeListContent() {
                   )}
                 </div>
                 <button
+                  onClick={() => openSendGift([])}
+                  className='flex items-center gap-1.5 rounded-lg border border-grey-200 px-4 py-2 text-sm font-medium text-grey-600 hover:bg-grey-50 transition-colors'
+                >
+                  <Gift className='h-4 w-4' />
+                  Send a Gift
+                </button>
+                <button
                   onClick={() => router.push('/employees/new')}
                   className='flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium text-white transition-all'
                   style={{ background: 'linear-gradient(to bottom, var(--primary-400) 17.5%, var(--primary-600))' }}
@@ -142,11 +195,32 @@ export default function EmployeeListContent() {
               </div>
             </div>
 
+            {selectedIds.size > 0 && (
+              <div className='flex items-center gap-3 border-b border-grey-100 bg-grey-50/50 px-5 py-2.5'>
+                <span className='text-xs font-medium text-grey-600'>{selectedIds.size} selected</span>
+                <button
+                  onClick={() => openSendGift(Array.from(selectedIds))}
+                  className='flex items-center gap-1.5 rounded-lg border border-grey-200 bg-white px-3 py-1.5 text-xs font-medium text-grey-600 hover:bg-grey-50'
+                >
+                  <Gift className='h-3.5 w-3.5' /> Send Gift
+                </button>
+                <button
+                  onClick={() => setRemoveTargets(Array.from(selectedIds))}
+                  className='flex items-center gap-1.5 rounded-lg border border-error-200 bg-white px-3 py-1.5 text-xs font-medium text-error-500 hover:bg-error-50'
+                >
+                  <Trash2 className='h-3.5 w-3.5' /> Remove
+                </button>
+              </div>
+            )}
+
             <div className='overflow-x-auto'>
               <table className='w-full text-left text-sm'>
                 <thead>
                   <tr className='border-b border-grey-100 text-xs text-grey-400'>
-                    <th className='px-5 py-3 font-medium'>Name</th>
+                    <th className='px-5 py-3 font-medium'>
+                      <input type='checkbox' checked={allOnPageSelected} onChange={toggleAll} className='h-4 w-4 rounded border-grey-300 accent-primary-500' />
+                    </th>
+                    <th className='px-3 py-3 font-medium'>Name</th>
                     <th className='px-3 py-3 font-medium'>@tag</th>
                     <th className='px-3 py-3 font-medium'>Department</th>
                     <th className='px-3 py-3 font-medium'>Role</th>
@@ -161,6 +235,9 @@ export default function EmployeeListContent() {
                   {paginated.map((employee) => (
                     <tr key={employee.id} className='border-b border-grey-50 hover:bg-grey-50/30 transition-colors'>
                       <td className='px-5 py-3'>
+                        <input type='checkbox' checked={selectedIds.has(employee.id)} onChange={() => toggleOne(employee.id)} className='h-4 w-4 rounded border-grey-300 accent-primary-500' />
+                      </td>
+                      <td className='px-3 py-3'>
                         <div className='flex items-center gap-2.5'>
                           <div className='flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-100 text-xs font-semibold text-primary-600'>
                             {employee.name.charAt(0)}
@@ -194,6 +271,20 @@ export default function EmployeeListContent() {
                               <Eye className='h-4 w-4' />
                               View profile
                             </button>
+                            <button
+                              onClick={() => { setOpenMenu(null); openSendGift([employee.id]) }}
+                              className='flex w-full items-center gap-2 px-4 py-2.5 text-sm text-grey-600 hover:bg-grey-50 transition-colors'
+                            >
+                              <Gift className='h-4 w-4' />
+                              Send a gift
+                            </button>
+                            <button
+                              onClick={() => { setOpenMenu(null); setRemoveTargets([employee.id]) }}
+                              className='flex w-full items-center gap-2 px-4 py-2.5 text-sm text-error-500 hover:bg-error-50 transition-colors'
+                            >
+                              <Trash2 className='h-4 w-4' />
+                              Remove
+                            </button>
                           </div>
                         )}
                       </td>
@@ -221,6 +312,34 @@ export default function EmployeeListContent() {
       </div>
 
       <EmployeeProfileDrawer employee={activeEmployee} onClose={() => setActiveEmployee(null)} />
+
+      <SendGiftModal
+        open={sendGiftOpen}
+        onClose={() => setSendGiftOpen(false)}
+        initialEmployeeIds={sendGiftTargets}
+      />
+
+      {removeTargets && (
+        <div className='fixed inset-0 z-50 flex items-center justify-center bg-black/40'>
+          <div className='w-full max-w-sm rounded-xl bg-white p-6 text-center shadow-xl'>
+            <div className='mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-error-50'>
+              <Trash2 className='h-5 w-5 text-error-500' />
+            </div>
+            <h3 className='text-lg font-semibold text-blackish'>
+              Remove {removeTargets.length} employee{removeTargets.length === 1 ? '' : 's'}?
+            </h3>
+            <p className='mt-1 text-sm text-grey-400'>
+              They&apos;ll be removed from your gifting list and any automated rules. This can&apos;t be undone.
+            </p>
+            <div className='mt-5 flex gap-3'>
+              <button onClick={() => setRemoveTargets(null)} className='flex-1 rounded-lg border border-grey-200 py-2.5 text-sm font-medium text-grey-600 hover:bg-grey-50 transition-colors'>Cancel</button>
+              <button onClick={confirmRemove} className='flex-1 rounded-lg bg-error-500 py-2.5 text-sm font-medium text-white hover:bg-error-600 transition-colors'>Remove</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <SuccessModal open={showRemoveSuccess} onClose={() => setShowRemoveSuccess(false)} message='Selected employees have been removed.' />
     </div>
   )
 }

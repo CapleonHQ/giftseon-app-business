@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { UploadCloud, Gift, Sparkles } from 'lucide-react'
+import { UploadCloud, Gift, Sparkles, Package } from 'lucide-react'
 import DashboardHeader from '@/components/Dashboard/DashboardHeader'
 import SuccessModal from '@/components/Profile/SuccessModal'
+import PackagingGallery from '@/components/Branding/PackagingMockups'
 import { useBranding } from '@/context/BrandingContext'
 import { useAuth } from '@/context/AuthContext'
 
@@ -120,6 +121,35 @@ export default function BrandingContent() {
                     <p className='px-2 py-2 text-center text-xs font-medium text-blackish'>{wrapper.label}</p>
                   </button>
                 ))}
+              </div>
+            </div>
+
+            <div className='rounded-xl border border-grey-100 bg-white p-5'>
+              <div className='flex items-center justify-between'>
+                <div className='flex items-center gap-2'>
+                  <Package className='h-4 w-4 text-primary-500' />
+                  <p className='text-sm font-semibold text-blackish'>Brand every physical gift</p>
+                </div>
+                <button
+                  onClick={() => updateBranding({ brandAllItems: !branding.brandAllItems })}
+                  className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${branding.brandAllItems ? 'bg-primary-500' : 'bg-grey-200'}`}
+                  aria-label='Toggle brand all items'
+                >
+                  <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${branding.brandAllItems ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                </button>
+              </div>
+              <p className='mt-1 text-xs text-grey-500'>
+                {branding.brandAllItems
+                  ? 'Every physical item — boxes, bottles, apparel, and books — ships with your logo and brand color applied.'
+                  : 'Physical gifts ship in Giftseon\'s standard packaging, unbranded.'}
+              </p>
+              <div className='mt-4'>
+                <PackagingGallery
+                  brandColor={branding.brandColor}
+                  logo={branding.logo}
+                  companyName={company?.companyName || 'Your Company'}
+                  dimmed={!branding.brandAllItems}
+                />
               </div>
             </div>
 

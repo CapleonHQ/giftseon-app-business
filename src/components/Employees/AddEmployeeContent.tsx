@@ -7,8 +7,7 @@ import { Plus, Trash2, CheckCircle2, HelpCircle, Upload } from 'lucide-react'
 import DashboardHeader from '@/components/Dashboard/DashboardHeader'
 import SuccessModal from '@/components/Profile/SuccessModal'
 import { useEmployees, MOCK_DIRECTORY, type NewEmployeeInput } from '@/context/EmployeesContext'
-
-const DEPARTMENTS = ['Engineering', 'Sales', 'Marketing', 'Finance', 'Human Resources', 'Operations', 'Customer Success']
+import { DEPARTMENTS } from '@/lib/departments'
 
 type Method = 'manual' | 'tags'
 

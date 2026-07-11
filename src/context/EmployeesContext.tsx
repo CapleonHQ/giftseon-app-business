@@ -153,6 +153,7 @@ type EmployeesContextValue = {
   employees: Employee[]
   addEmployees: (inputs: NewEmployeeInput[]) => Employee[]
   updateEmployee: (id: string, updates: Partial<Employee>) => void
+  removeEmployees: (ids: string[]) => void
   getEmployee: (id: string) => Employee | undefined
 }
 
@@ -177,14 +178,19 @@ export const EmployeesProvider = ({ children }: { children: ReactNode }) => {
     setEmployees((prev) => prev.map((e) => (e.id === id ? { ...e, ...updates } : e)))
   }, [])
 
+  const removeEmployees = useCallback((ids: string[]) => {
+    const idSet = new Set(ids)
+    setEmployees((prev) => prev.filter((e) => !idSet.has(e.id)))
+  }, [])
+
   const getEmployee = useCallback(
     (id: string) => employees.find((e) => e.id === id),
     [employees]
   )
 
   const value = useMemo(
-    () => ({ employees, addEmployees, updateEmployee, getEmployee }),
-    [employees, addEmployees, updateEmployee, getEmployee]
+    () => ({ employees, addEmployees, updateEmployee, removeEmployees, getEmployee }),
+    [employees, addEmployees, updateEmployee, removeEmployees, getEmployee]
   )
 
   return <EmployeesContext.Provider value={value}>{children}</EmployeesContext.Provider>

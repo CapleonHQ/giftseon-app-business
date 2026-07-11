@@ -15,6 +15,8 @@ import {
   Menu,
   X,
   Sparkles,
+  ShoppingBag,
+  LifeBuoy,
 } from 'lucide-react'
 import GiftseonLogo from '@/components/Auth/GiftseonLogo'
 import LogoutModal from './LogoutModal'
@@ -24,9 +26,11 @@ const NAV_ITEMS = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutGrid },
   { label: 'Employees', href: '/employees', icon: Users },
   { label: 'Gifting Configuration', href: '/gifting', icon: Gift },
+  { label: 'Marketplace', href: '/marketplace', icon: ShoppingBag },
   { label: 'Budget & Wallet', href: '/budget', icon: Wallet },
   { label: 'Branded Gifting', href: '/branding', icon: Palette },
   { label: 'Reports', href: '/reports', icon: BarChart3 },
+  { label: 'Support', href: '/support', icon: LifeBuoy },
   { label: 'Settings', href: '/settings', icon: Settings },
 ]
 

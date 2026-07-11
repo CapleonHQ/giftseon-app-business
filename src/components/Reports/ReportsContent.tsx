@@ -10,11 +10,15 @@ import {
   Legend,
 } from 'chart.js'
 import { Bar } from 'react-chartjs-2'
-import { Gift, Clock3, CheckCircle2, Truck, XCircle, Download } from 'lucide-react'
+import { Gift, Clock3, CheckCircle2, Truck, XCircle, Download, Radio } from 'lucide-react'
 import DashboardHeader from '@/components/Dashboard/DashboardHeader'
 import StatCard from '@/components/Dashboard/StatCard'
+import RequireEmployeesGate from '@/components/Dashboard/RequireEmployeesGate'
+import DeliveryTrackerModal from '@/components/Tracking/DeliveryTrackerModal'
 import { useEmployees } from '@/context/EmployeesContext'
 import { useGifting } from '@/context/GiftingContext'
+import { MOCK_DELIVERIES } from '@/lib/mockTracking'
+import type { PhysicalDelivery } from '@/types/Tracking'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend)
 
@@ -34,12 +38,6 @@ const CAMPAIGNS = [
   { id: 'camp-4', campaign: 'Welcome Pack — New Hires', occasion: 'welcome', sent: 6, redeemed: 4 },
 ]
 
-const PHYSICAL_DELIVERIES = [
-  { id: 'del-1', employee: 'Chinedu Balogun', item: 'Welcome Onboarding Pack', status: 'In Transit', trackingUrl: 'https://track.giftseon.com/GB-2381' },
-  { id: 'del-2', employee: 'Tobi Fashola', item: 'Custom Gift Pack', status: 'Delivered', trackingUrl: 'https://track.giftseon.com/GB-2290' },
-  { id: 'del-3', employee: 'Ibrahim Suleiman', item: 'Compensation Voucher Pack', status: 'Processing', trackingUrl: 'https://track.giftseon.com/GB-2402' },
-]
-
 const BREAKDOWN_TABS = ['Occasion Type', 'Employee', 'Month', 'Budget Consumed'] as const
 type BreakdownTab = (typeof BREAKDOWN_TABS)[number]
 
@@ -53,7 +51,9 @@ const OCCASION_BREAKDOWN = [
 
 const STATUS_STYLES: Record<string, string> = {
   Delivered: 'bg-success-50 text-success-500',
+  'Out for Delivery': 'bg-information-50 text-information-500',
   'In Transit': 'bg-information-50 text-information-500',
+  Dispatched: 'bg-warning-50 text-warning-500',
   Processing: 'bg-warning-50 text-warning-500',
 }
 
@@ -74,6 +74,7 @@ export default function ReportsContent() {
   const { employees } = useEmployees()
   const { rules } = useGifting()
   const [breakdownTab, setBreakdownTab] = useState<BreakdownTab>('Occasion Type')
+  const [trackedDelivery, setTrackedDelivery] = useState<PhysicalDelivery | null>(null)
 
   const completionRate = useMemo(() => {
     if (employees.length === 0) return 0
@@ -137,9 +138,12 @@ export default function ReportsContent() {
   }
 
   return (
+    <>
     <div className='flex flex-col'>
       <DashboardHeader title='Reports' />
-      <div className='p-6 lg:p-8 space-y-6'>
+      <div className='p-6 lg:p-8'>
+      <RequireEmployeesGate pageLabel='Reports'>
+      <div className='space-y-6'>
         <div className='grid grid-cols-2 gap-4 lg:grid-cols-5'>
           <StatCard label='Total sent' value='41' icon={<Gift className='h-4 w-4 text-primary-500' />} />
           <StatCard label='Pending' value='4' icon={<Clock3 className='h-4 w-4 text-warning-500' />} iconBg='bg-warning-50' />
@@ -212,16 +216,19 @@ export default function ReportsContent() {
           <div className='rounded-xl border border-grey-100 bg-white p-5'>
             <p className='text-sm font-semibold text-blackish'>Physical Gift Delivery Status</p>
             <div className='mt-3 space-y-3'>
-              {PHYSICAL_DELIVERIES.map((d) => (
+              {MOCK_DELIVERIES.map((d) => (
                 <div key={d.id} className='rounded-lg border border-grey-100 p-3.5'>
                   <div className='flex items-center justify-between'>
                     <p className='text-sm font-medium text-blackish'>{d.employee}</p>
                     <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLES[d.status]}`}>{d.status}</span>
                   </div>
                   <p className='mt-1 text-xs text-grey-400'>{d.item}</p>
-                  <a href={d.trackingUrl} target='_blank' rel='noreferrer' className='mt-1.5 inline-block text-xs font-medium text-primary-500 hover:text-primary-600 underline'>
-                    Track in real time
-                  </a>
+                  <button
+                    onClick={() => setTrackedDelivery(d)}
+                    className='mt-1.5 flex items-center gap-1 text-xs font-medium text-primary-500 hover:text-primary-600'
+                  >
+                    <Radio className='h-3 w-3' /> Track in real time
+                  </button>
                 </div>
               ))}
             </div>
@@ -267,6 +274,11 @@ export default function ReportsContent() {
           </div>
         </div>
       </div>
+      </RequireEmployeesGate>
+      </div>
     </div>
+
+    <DeliveryTrackerModal delivery={trackedDelivery} onClose={() => setTrackedDelivery(null)} />
+    </>
   )
 }
