@@ -5,7 +5,7 @@ import { GIFTING_TYPE_DEFINITIONS } from '@/lib/mockGiftingTypes'
 type BackendGiftFormat = 'cash' | 'voucher' | 'marketplace_item' | 'custom_gift_pack'
 type BackendTargetScope = 'all_employees' | 'department' | 'specific_contacts'
 
-const FORMAT_TO_BACKEND: Record<GiftFormat, BackendGiftFormat> = {
+export const FORMAT_TO_BACKEND: Record<GiftFormat, BackendGiftFormat> = {
   Cash: 'cash',
   Voucher: 'voucher',
   'Marketplace Item': 'marketplace_item',

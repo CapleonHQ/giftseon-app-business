@@ -1,18 +1,21 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, ArrowRight, Sparkles, Users, Building2, X } from 'lucide-react'
 import SuccessModal from '@/components/Profile/SuccessModal'
 import ProductPicker from '@/components/Marketplace/ProductPicker'
 import { useEmployees } from '@/context/EmployeesContext'
 import { useGifting } from '@/context/GiftingContext'
-import { useWallet } from '@/context/WalletContext'
 import { useBranding } from '@/context/BrandingContext'
 import { useAuth } from '@/context/AuthContext'
 import { DEPARTMENTS } from '@/lib/departments'
 import { MARKETPLACE_PRODUCTS } from '@/lib/mockMarketplace'
 import { GIFT_FORMATS, type GiftFormat } from '@/types/Gifting'
 import type { MarketplaceProduct } from '@/types/Marketplace'
+import * as giftsApi from '@/lib/api/gifts'
+import { FORMAT_TO_BACKEND } from '@/lib/api/giftingRules'
+import type { ApiError } from '@/lib/api/client'
 
 type RecipientMode = 'employee' | 'department'
 type GiftSource = 'configuration' | 'custom' | 'marketplace'
@@ -27,9 +30,9 @@ interface SendGiftModalProps {
 }
 
 export default function SendGiftModal({ open, onClose, initialEmployeeIds, initialProductId }: SendGiftModalProps) {
-  const { employees, updateEmployee } = useEmployees()
+  const queryClient = useQueryClient()
+  const { employees } = useEmployees()
   const { rules } = useGifting()
-  const { recordGiftSpend } = useWallet()
   const { branding } = useBranding()
   const { company } = useAuth()
 
@@ -51,6 +54,7 @@ export default function SendGiftModal({ open, onClose, initialEmployeeIds, initi
   const [message, setMessage] = useState(branding.messageTemplate)
 
   const [error, setError] = useState('')
+  const [isSending, setIsSending] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
   const [sentCount, setSentCount] = useState(0)
 
@@ -130,21 +134,42 @@ export default function SendGiftModal({ open, onClose, initialEmployeeIds, initi
 
   const giftLabel = giftSource === 'configuration' ? (selectedRule?.label ?? 'Gift') : giftSource === 'marketplace' ? (product?.name ?? 'Gift') : (customFormat || 'Custom Gift')
 
-  const handleSend = () => {
-    const result = recordGiftSpend(`${giftLabel} — ${recipients.length} recipient${recipients.length === 1 ? '' : 's'}`, totalCost)
-    if (!result.success) {
-      setError(result.reason ?? 'Insufficient budget for this send.')
+  const resolvedFormat: GiftFormat = giftSource === 'configuration'
+    ? (selectedRule?.giftFormat ?? 'Cash')
+    : giftSource === 'marketplace'
+      ? 'Marketplace Item'
+      : (customFormat || 'Cash')
+
+  const handleSend = async () => {
+    setError('')
+    setIsSending(true)
+    const failures: string[] = []
+    for (const employee of recipients) {
+      try {
+        await giftsApi.sendGift({
+          contactId: employee.id,
+          amount: costPerGift,
+          message,
+          occasion: occasionLabel,
+          giftFormat: FORMAT_TO_BACKEND[resolvedFormat],
+          itemDescription: resolvedFormat !== 'Cash' ? giftLabel : undefined,
+          itemReferenceId: giftSource === 'marketplace' ? product?.id : undefined,
+        })
+      } catch (err) {
+        failures.push(`${employee.name}: ${(err as ApiError).message}`)
+      }
+    }
+    setIsSending(false)
+    queryClient.invalidateQueries({ queryKey: ['wallet'] })
+
+    if (failures.length === recipients.length) {
+      setError(failures[0] ?? 'Could not send this gift. Please try again.')
       return
     }
-    recipients.forEach((employee) => {
-      updateEmployee(employee.id, {
-        giftHistory: [
-          { id: `gh-${Date.now()}-${employee.id}`, occasion: occasionLabel, date: new Date().toISOString().slice(0, 10), amount: costPerGift, status: 'Pending' },
-          ...employee.giftHistory,
-        ],
-      })
-    })
-    setSentCount(recipients.length)
+    if (failures.length > 0) {
+      setError(`Sent to ${recipients.length - failures.length} of ${recipients.length} recipients. Failed: ${failures.join('; ')}`)
+    }
+    setSentCount(recipients.length - failures.length)
     setShowSuccess(true)
   }
 
@@ -342,8 +367,8 @@ export default function SendGiftModal({ open, onClose, initialEmployeeIds, initi
                 Continue <ArrowRight className='h-4 w-4' />
               </button>
             ) : (
-              <button onClick={handleSend} className='flex-1 rounded-lg py-2.5 text-sm font-medium text-white transition-all' style={{ background: 'linear-gradient(to bottom, var(--primary-400) 17.5%, var(--primary-600))' }}>
-                Send gift
+              <button onClick={handleSend} disabled={isSending} className='flex-1 rounded-lg py-2.5 text-sm font-medium text-white transition-all disabled:opacity-60' style={{ background: 'linear-gradient(to bottom, var(--primary-400) 17.5%, var(--primary-600))' }}>
+                {isSending ? 'Sending...' : 'Send gift'}
               </button>
             )}
           </div>
