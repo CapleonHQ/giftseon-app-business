@@ -7,19 +7,9 @@ import { UploadCloud, FileSpreadsheet, X, Download } from 'lucide-react'
 import DashboardHeader from '@/components/Dashboard/DashboardHeader'
 import SuccessModal from '@/components/Profile/SuccessModal'
 import { useEmployees, type NewEmployeeInput } from '@/context/EmployeesContext'
+import type { ParsedRow } from '@/types/Employee'
 
 const EXPECTED_COLUMNS = ['Name', 'Phone', 'Email', 'Role', 'Department', 'Date of Joining', 'Date of Birth']
-
-type ParsedRow = {
-  name: string
-  phone: string
-  email: string
-  role: string
-  department: string
-  dateOfJoining: string
-  dateOfBirth: string
-  error?: string
-}
 
 const parseCsv = (text: string): ParsedRow[] => {
   const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)

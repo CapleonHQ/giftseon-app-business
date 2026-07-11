@@ -7,9 +7,7 @@ import DashboardHeader from '@/components/Dashboard/DashboardHeader'
 import SuccessModal from '@/components/Profile/SuccessModal'
 import { useGifting } from '@/context/GiftingContext'
 import { GIFTING_TYPE_DEFINITIONS } from '@/lib/mockGiftingTypes'
-import type { GiftFormat, GiftingTypeKey, BudgetTier } from '@/types/Gifting'
-
-const GIFT_FORMATS: GiftFormat[] = ['Cash', 'Voucher', 'Marketplace Item', 'Custom Gift Pack']
+import { GIFT_FORMATS, type GiftFormat, type GiftingTypeKey, type BudgetTier } from '@/types/Gifting'
 
 const STEP_LABELS = ['Gifting Type', 'Gift Format', 'Budget', 'Message', 'Distribution', 'Review']
 

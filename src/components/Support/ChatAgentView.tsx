@@ -3,21 +3,8 @@
 import { useState } from 'react'
 import { ArrowLeft } from 'lucide-react'
 import SuccessModal from '@/components/Profile/SuccessModal'
-
-type TicketStatus = 'Open' | 'In Progress' | 'Resolved'
-
-interface Ticket {
-  id: string
-  subject: string
-  description: string
-  priority: 'Low' | 'Medium' | 'High'
-  status: TicketStatus
-  createdAt: string
-}
-
-const INITIAL_TICKETS: Ticket[] = [
-  { id: 'TCK-3104', subject: 'Auto-allocate suggestion looked too low for Sales', description: 'The per-gift amount suggested for Work Anniversary seemed low given our headcount.', priority: 'Medium', status: 'In Progress', createdAt: 'Jul 9, 2026' },
-]
+import type { Ticket, TicketStatus } from '@/types/Support'
+import { INITIAL_TICKETS } from '@/lib/mockSupport'
 
 const STATUS_STYLES: Record<TicketStatus, string> = {
   Open: 'bg-warning-50 text-warning-500',

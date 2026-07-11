@@ -11,13 +11,12 @@ import { useBranding } from '@/context/BrandingContext'
 import { useAuth } from '@/context/AuthContext'
 import { DEPARTMENTS } from '@/lib/departments'
 import { MARKETPLACE_PRODUCTS } from '@/lib/mockMarketplace'
-import type { GiftFormat } from '@/types/Gifting'
+import { GIFT_FORMATS, type GiftFormat } from '@/types/Gifting'
 import type { MarketplaceProduct } from '@/types/Marketplace'
 
 type RecipientMode = 'employee' | 'department'
 type GiftSource = 'configuration' | 'custom' | 'marketplace'
 
-const GIFT_FORMATS: GiftFormat[] = ['Cash', 'Voucher', 'Marketplace Item', 'Custom Gift Pack']
 const STEP_LABELS = ['Recipients', 'Gift Type', 'Message', 'Review']
 
 interface SendGiftModalProps {

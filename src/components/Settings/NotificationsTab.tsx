@@ -1,18 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-
-interface NotificationSetting {
-  label: string
-  email: boolean
-  inApp: boolean
-  sms: boolean
-}
-
-interface NotificationCategory {
-  title: string
-  items: NotificationSetting[]
-}
+import type { NotificationCategory } from '@/types/Settings'
 
 const INITIAL_SETTINGS: NotificationCategory[] = [
   {
