@@ -8,12 +8,12 @@ import GiftseonLogo from '@/components/Auth/GiftseonLogo'
 import BackToHomeLink from '@/components/Auth/BackToHomeLink'
 import LoginIllustration from '@/components/Auth/illustrations/LoginIllustration'
 import { useAuth } from '@/context/AuthContext'
-import type { CompanyProfile } from '@/types/Company'
+import type { ApiError } from '@/lib/api/client'
 
 export default function LoginPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { login } = useAuth()
+  const { loginWithPassword } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -27,41 +27,21 @@ export default function LoginPage() {
     setError('')
     setIsLoading(true)
 
-    // Dummy-data app: simulate an auth request, then actually establish a session.
-    await new Promise((r) => setTimeout(r, 700))
-
-    if (password.length < 4) {
+    try {
+      await loginWithPassword(email, password)
+      const next = searchParams.get('next')
+      router.replace(next && next.startsWith('/') ? next : '/dashboard')
+    } catch (err) {
+      const apiError = err as ApiError
+      if (apiError.statusCode === 401 && apiError.message.toLowerCase().includes('otp')) {
+        router.push(`/register?step=otp&email=${encodeURIComponent(email)}`)
+        return
+      }
+      setError(apiError.message || 'Incorrect email or password. Please try again.')
+    } finally {
       setIsLoading(false)
-      setError('Incorrect email or password. Please try again.')
-      return
     }
-
-    const [localPart] = email.split('@')
-    const companyName = localPart
-      ? localPart.charAt(0).toUpperCase() + localPart.slice(1).replace(/[._-]/g, ' ')
-      : 'Your Company'
-
-    const profile: CompanyProfile = {
-      id: 'company-1',
-      companyName: `${companyName} Ltd`,
-      businessType: 'Company',
-      industry: 'Technology',
-      adminFirstName: 'Amara',
-      adminLastName: 'Bello',
-      email,
-      phone: '08012345678',
-      isVerified: true,
-      verificationMethod: 'cac',
-      walletId: 'wallet-1',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }
-
-    login(profile)
-    setIsLoading(false)
-    const next = searchParams.get('next')
-    router.replace(next && next.startsWith('/') ? next : '/dashboard')
-  }, [isValid, email, password, login, router, searchParams])
+  }, [isValid, email, password, loginWithPassword, router, searchParams])
 
   return (
     <div className='flex min-h-screen flex-col bg-white'>
