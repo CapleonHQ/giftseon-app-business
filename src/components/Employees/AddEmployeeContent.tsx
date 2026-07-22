@@ -213,7 +213,7 @@ export default function AddEmployeeContent() {
                 </FormField>
               </div>
               {email.trim() && (!phone.trim() || !dateOfBirth) && (
-                <p className='text-xs text-grey-400'>We'll fill in any missing phone number or date of birth from their Giftseon account once it's linked or set up.</p>
+                <p className='text-xs text-grey-400'>We&apos;ll fill in any missing phone number or date of birth from their Giftseon account once it&apos;s linked or set up.</p>
               )}
               {submitError && <p className='text-sm text-error-500'>{submitError}</p>}
               <button type='submit' disabled={isSubmitting} className='w-full rounded-xl py-3 text-sm font-medium text-white transition-all disabled:opacity-60' style={{ background: 'linear-gradient(to bottom, var(--primary-400) 17.5%, var(--primary-600))' }}>
