@@ -1,19 +1,61 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Plus, Trash2, CheckCircle2, HelpCircle, Upload } from 'lucide-react'
 import DashboardHeader from '@/components/Dashboard/DashboardHeader'
 import SuccessModal from '@/components/Profile/SuccessModal'
-import { useEmployees, MOCK_DIRECTORY, type NewEmployeeInput } from '@/context/EmployeesContext'
+import { useEmployees, type NewEmployeeInput } from '@/context/EmployeesContext'
 import { DEPARTMENTS } from '@/lib/departments'
+import * as employeesApi from '@/lib/api/employees'
+import type { ApiError } from '@/lib/api/client'
+
+const useDebouncedValue = (value: string, delayMs: number) => {
+  const [debounced, setDebounced] = useState(value)
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(value), delayMs)
+    return () => clearTimeout(timer)
+  }, [value, delayMs])
+  return debounced
+}
+
+function TagPreview({ tag, alreadyAdded }: { tag: string; alreadyAdded: boolean }) {
+  const cleaned = tag.trim()
+  const debounced = useDebouncedValue(cleaned, 400)
+
+  const { data: resolved, isFetching } = useQuery({
+    queryKey: ['resolve-tag', debounced],
+    queryFn: () => employeesApi.resolveTag(debounced),
+    enabled: !alreadyAdded && debounced.length > 1,
+    staleTime: 60_000,
+  })
+
+  if (!cleaned) return null
+  if (alreadyAdded) {
+    return <p className='mt-1 text-xs text-warning-500'>This tag has already been added.</p>
+  }
+  if (debounced !== cleaned || isFetching) {
+    return <p className='mt-1 text-xs text-grey-400'>Looking up {tag}…</p>
+  }
+  if (resolved) {
+    return (
+      <p className='mt-1 flex items-center gap-1 text-xs text-success-500'>
+        <CheckCircle2 className='h-3.5 w-3.5' /> Found: {resolved.name} &bull; {resolved.phone} &bull; {resolved.email}
+      </p>
+    )
+  }
+  return <p className='mt-1 text-xs text-grey-400'>Not found — {tag} will get an onboarding invite instead.</p>
+}
 
 type Method = 'manual' | 'tags'
 
 export default function AddEmployeeContent() {
   const router = useRouter()
-  const { employees, addEmployees } = useEmployees()
+  const { employees, addEmployees, addEmployeesByTag } = useEmployees()
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
   const [method, setMethod] = useState<Method>('manual')
   const [showSuccess, setShowSuccess] = useState(false)
   const [successMessage, setSuccessMessage] = useState('')
@@ -37,22 +79,19 @@ export default function AddEmployeeContent() {
 
   const existingTags = new Set(employees.map((e) => e.tag).filter(Boolean))
 
-  const resolveTag = useCallback((tag: string) => {
-    const clean = tag.trim().toLowerCase()
-    if (!clean) return null
-    return MOCK_DIRECTORY.find((d) => d.tag.toLowerCase() === clean) || null
-  }, [])
-
-  const handleManualSubmit = () => {
+  const handleManualSubmit = async () => {
     const next: Record<string, string> = {}
     if (!name.trim()) next.name = 'Full name is required'
-    if (!phone.trim()) next.phone = 'Phone number is required'
     if (!email.trim()) next.email = 'Email address is required'
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) next.email = 'Enter a valid email address'
+    // Phone/date of birth are auto-filled from the employee's Giftseon account
+    // (existing, or newly onboarded via invite) whenever an email is given,
+    // so only require them manually when there's no email to resolve against.
+    if (!email.trim() && !phone.trim()) next.phone = 'Phone number is required'
+    if (!email.trim() && !dateOfBirth) next.dateOfBirth = 'Date of birth is required'
     if (!role.trim()) next.role = 'Role is required'
     if (!department) next.department = 'Select a department'
     if (!dateOfJoining) next.dateOfJoining = 'Date of joining is required'
-    if (!dateOfBirth) next.dateOfBirth = 'Date of birth is required'
     setErrors(next)
     if (Object.keys(next).length > 0) return
 
@@ -66,13 +105,21 @@ export default function AddEmployeeContent() {
       dateOfBirth,
       source: 'manual',
     }
-    addEmployees([input])
-    setSuccessMessage(`${name.trim()} has been added. They'll receive an onboarding invite to set up their Giftseon profile.`)
-    setShowSuccess(true)
-    setName(''); setPhone(''); setEmail(''); setRole(''); setDepartment(''); setDateOfJoining(''); setDateOfBirth('')
+    setSubmitError('')
+    setIsSubmitting(true)
+    try {
+      await addEmployees([input])
+      setSuccessMessage(`${name.trim()} has been added. They'll receive an onboarding invite to set up their Giftseon profile.`)
+      setShowSuccess(true)
+      setName(''); setPhone(''); setEmail(''); setRole(''); setDepartment(''); setDateOfJoining(''); setDateOfBirth('')
+    } catch (err) {
+      setSubmitError((err as ApiError).message || 'Could not add this employee. Please try again.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
-  const handleTagsSubmit = () => {
+  const handleTagsSubmit = async () => {
     const cleanTags = tags.map((t) => t.trim()).filter(Boolean)
     const next: Record<string, string> = {}
     if (cleanTags.length === 0) next.tags = 'Add at least one @tag'
@@ -82,30 +129,23 @@ export default function AddEmployeeContent() {
     setTagErrors(next)
     if (Object.keys(next).length > 0) return
 
-    const inputs: NewEmployeeInput[] = cleanTags.map((tag) => {
-      const resolved = resolveTag(tag)
-      return {
-        name: resolved?.name || tag.replace('@', ''),
-        tag: tag.startsWith('@') ? tag : `@${tag}`,
-        email: resolved?.email || '',
-        phone: resolved?.phone || '',
-        role: tagRole.trim(),
-        department: tagDept,
-        dateOfJoining: tagJoinDate,
-        dateOfBirth: '',
-        source: 'tag',
-        profileCompletion: resolved ? 'Complete' : 'Incomplete',
-      }
-    })
-    addEmployees(inputs)
-    const foundCount = inputs.filter((i) => i.profileCompletion === 'Complete').length
-    setSuccessMessage(
-      `${inputs.length} employee${inputs.length > 1 ? 's' : ''} added. ${foundCount} profile${foundCount === 1 ? '' : 's'} pulled in automatically from Giftseon${
-        inputs.length - foundCount > 0 ? `, and ${inputs.length - foundCount} will get an onboarding invite since we couldn't find their tag.` : '.'
-      }`
-    )
-    setShowSuccess(true)
-    setTags(['']); setTagDept(''); setTagRole(''); setTagJoinDate('')
+    setSubmitError('')
+    setIsSubmitting(true)
+    try {
+      const result = await addEmployeesByTag(cleanTags, { department: tagDept, role: tagRole.trim(), dateOfJoining: tagJoinDate })
+      const total = result.resolvedCount + result.unresolvedCount
+      setSuccessMessage(
+        `${total} employee${total === 1 ? '' : 's'} added. ${result.resolvedCount} profile${result.resolvedCount === 1 ? '' : 's'} pulled in automatically from Giftseon${
+          result.unresolvedCount > 0 ? `, and ${result.unresolvedCount} will get an onboarding invite since we couldn't find their tag.` : '.'
+        }${result.duplicateCount > 0 ? ` ${result.duplicateCount} tag${result.duplicateCount === 1 ? ' was' : 's were'} skipped as already added to this company.` : ''}`
+      )
+      setShowSuccess(true)
+      setTags(['']); setTagDept(''); setTagRole(''); setTagJoinDate('')
+    } catch (err) {
+      setSubmitError((err as ApiError).message || 'Could not add these employees. Please try again.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -146,7 +186,7 @@ export default function AddEmployeeContent() {
                 <input type='text' value={name} onChange={(e) => setName(e.target.value)} placeholder='Enter employee full name' className={`form-input ${errors.name ? 'border-error-400' : ''}`} />
               </FormField>
               <div className='grid grid-cols-2 gap-4'>
-                <FormField label='Phone Number' error={errors.phone}>
+                <FormField label={email.trim() ? 'Phone Number (optional)' : 'Phone Number'} error={errors.phone}>
                   <input type='tel' value={phone} onChange={(e) => setPhone(e.target.value)} placeholder='080XXXXXXXX' className={`form-input ${errors.phone ? 'border-error-400' : ''}`} />
                 </FormField>
                 <FormField label='Email Address' error={errors.email}>
@@ -168,12 +208,16 @@ export default function AddEmployeeContent() {
                 <FormField label='Date of Joining' error={errors.dateOfJoining}>
                   <input type='date' value={dateOfJoining} onChange={(e) => setDateOfJoining(e.target.value)} className={`form-input ${errors.dateOfJoining ? 'border-error-400' : ''}`} />
                 </FormField>
-                <FormField label='Date of Birth' error={errors.dateOfBirth}>
+                <FormField label={email.trim() ? 'Date of Birth (optional)' : 'Date of Birth'} error={errors.dateOfBirth}>
                   <input type='date' value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className={`form-input ${errors.dateOfBirth ? 'border-error-400' : ''}`} />
                 </FormField>
               </div>
-              <button type='submit' className='w-full rounded-xl py-3 text-sm font-medium text-white transition-all' style={{ background: 'linear-gradient(to bottom, var(--primary-400) 17.5%, var(--primary-600))' }}>
-                Add Employee
+              {email.trim() && (!phone.trim() || !dateOfBirth) && (
+                <p className='text-xs text-grey-400'>We'll fill in any missing phone number or date of birth from their Giftseon account once it's linked or set up.</p>
+              )}
+              {submitError && <p className='text-sm text-error-500'>{submitError}</p>}
+              <button type='submit' disabled={isSubmitting} className='w-full rounded-xl py-3 text-sm font-medium text-white transition-all disabled:opacity-60' style={{ background: 'linear-gradient(to bottom, var(--primary-400) 17.5%, var(--primary-600))' }}>
+                {isSubmitting ? 'Adding...' : 'Add Employee'}
               </button>
             </form>
           )}
@@ -182,13 +226,14 @@ export default function AddEmployeeContent() {
             <div className='space-y-5 rounded-xl border border-grey-100 bg-white p-6'>
               <div className='flex items-start gap-2 rounded-lg bg-information-50 px-3.5 py-2.5 text-xs text-information-600'>
                 <HelpCircle className='h-4 w-4 shrink-0 mt-0.5' />
-                Enter each employee&apos;s Giftseon @tag. If they already have an account, we&apos;ll pull their profile details in automatically. Try @adaeze, @chinedu_b, @tobifash or @amaka.j.
+                Enter each employee&apos;s Giftseon @tag. If they already have an account, we&apos;ll pull their profile details in automatically — otherwise they&apos;ll get an onboarding invite by email.
               </div>
 
               <div className='space-y-2.5'>
                 {tags.map((tag, i) => {
-                  const resolved = resolveTag(tag)
-                  const alreadyAdded = tag.trim() && existingTags.has(tag.trim().startsWith('@') ? tag.trim() : `@${tag.trim()}`)
+                  const alreadyAdded = Boolean(
+                    tag.trim() && existingTags.has(tag.trim().startsWith('@') ? tag.trim() : `@${tag.trim()}`)
+                  )
                   return (
                     <div key={i}>
                       <div className='flex items-center gap-2'>
@@ -209,17 +254,7 @@ export default function AddEmployeeContent() {
                           </button>
                         )}
                       </div>
-                      {tag.trim() && (
-                        alreadyAdded ? (
-                          <p className='mt-1 text-xs text-warning-500'>This tag has already been added.</p>
-                        ) : resolved ? (
-                          <p className='mt-1 flex items-center gap-1 text-xs text-success-500'>
-                            <CheckCircle2 className='h-3.5 w-3.5' /> Found: {resolved.name} &bull; {resolved.phone} &bull; {resolved.email}
-                          </p>
-                        ) : (
-                          <p className='mt-1 text-xs text-grey-400'>Not found — {tag} will get an onboarding invite instead.</p>
-                        )
-                      )}
+                      <TagPreview tag={tag} alreadyAdded={alreadyAdded} />
                     </div>
                   )
                 })}
@@ -249,13 +284,15 @@ export default function AddEmployeeContent() {
                 </FormField>
               </div>
 
+              {submitError && <p className='text-sm text-error-500'>{submitError}</p>}
               <button
                 type='button'
                 onClick={handleTagsSubmit}
-                className='w-full rounded-xl py-3 text-sm font-medium text-white transition-all'
+                disabled={isSubmitting}
+                className='w-full rounded-xl py-3 text-sm font-medium text-white transition-all disabled:opacity-60'
                 style={{ background: 'linear-gradient(to bottom, var(--primary-400) 17.5%, var(--primary-600))' }}
               >
-                Add Employees
+                {isSubmitting ? 'Adding...' : 'Add Employees'}
               </button>
             </div>
           )}

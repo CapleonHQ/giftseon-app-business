@@ -30,3 +30,14 @@ export interface DirectoryUser {
   phone: string
   email: string
 }
+
+export type ParsedRow = {
+  name: string
+  phone: string
+  email: string
+  role: string
+  department: string
+  dateOfJoining: string
+  dateOfBirth: string
+  error?: string
+}

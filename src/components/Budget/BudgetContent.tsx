@@ -18,7 +18,7 @@ import type { CompanyPlan } from '@/types/Company'
 const PLANS: CompanyPlan[] = ['Starter', 'Growth', 'Enterprise']
 
 export default function BudgetContent() {
-  const { wallet, spendLimits, topUp, setBudgetCap, setLowBalanceThreshold, setSpendLimit, setSpendLimits } = useWallet()
+  const { wallet, spendLimits, refresh, setBudgetCap, setLowBalanceThreshold, setSpendLimit, setSpendLimits } = useWallet()
   const { rules } = useGifting()
   const { employees } = useEmployees()
   const { company, updateCompany } = useAuth()
@@ -56,7 +56,9 @@ export default function BudgetContent() {
       setTopUpError('Enter a valid top-up amount')
       return
     }
-    topUp(amount)
+    // Real crediting happens via the bank-transfer webhook, not this button —
+    // this just re-checks whether the transfer has landed yet.
+    refresh()
     setShowTopUp(false)
     setShowTopUpSuccess(true)
     setTopUpAmount('')
@@ -429,7 +431,7 @@ export default function BudgetContent() {
         </div>
       )}
 
-      <SuccessModal open={showTopUpSuccess} onClose={() => setShowTopUpSuccess(false)} message='Your wallet has been credited successfully.' />
+      <SuccessModal open={showTopUpSuccess} onClose={() => setShowTopUpSuccess(false)} message="We've refreshed your balance. Bank transfers can take a few minutes to reflect — check back shortly if it isn't showing yet." />
       <SuccessModal open={showBudgetSuccess} onClose={() => setShowBudgetSuccess(false)} message='Your gifting budget cap has been updated.' />
       <SuccessModal open={showThresholdSuccess} onClose={() => setShowThresholdSuccess(false)} message='Low balance alert threshold updated.' />
       <SuccessModal open={showLimitsSuccess} onClose={() => setShowLimitsSuccess(false)} message='Per-gift-type spending limits updated.' />

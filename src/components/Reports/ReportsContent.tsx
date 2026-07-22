@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -10,44 +11,21 @@ import {
   Legend,
 } from 'chart.js'
 import { Bar } from 'react-chartjs-2'
-import { Gift, Clock3, CheckCircle2, Truck, XCircle, Download, Radio } from 'lucide-react'
+import { Gift, Clock3, CheckCircle2, Truck, Download, Radio } from 'lucide-react'
 import DashboardHeader from '@/components/Dashboard/DashboardHeader'
 import StatCard from '@/components/Dashboard/StatCard'
 import RequireEmployeesGate from '@/components/Dashboard/RequireEmployeesGate'
 import DeliveryTrackerModal from '@/components/Tracking/DeliveryTrackerModal'
 import { useEmployees } from '@/context/EmployeesContext'
 import { useGifting } from '@/context/GiftingContext'
-import { MOCK_DELIVERIES } from '@/lib/mockTracking'
+import { getReportsOverview, getSpendByMonth, getOccasionBreakdown, getCampaignRedemptions } from '@/lib/api/reports'
+import { getDeliveries } from '@/lib/api/tracking'
 import type { PhysicalDelivery } from '@/types/Tracking'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend)
 
-const SPEND_BY_MONTH = [
-  { month: 'Feb', amount: 180000 },
-  { month: 'Mar', amount: 220000 },
-  { month: 'Apr', amount: 165000 },
-  { month: 'May', amount: 310000 },
-  { month: 'Jun', amount: 275000 },
-  { month: 'Jul', amount: 195000 },
-]
-
-const CAMPAIGNS = [
-  { id: 'camp-1', campaign: 'Birthday Gift — July Cohort', occasion: 'birthday', sent: 14, redeemed: 11 },
-  { id: 'camp-2', campaign: 'Work Anniversary Q2', occasion: 'work_anniversary', sent: 8, redeemed: 8 },
-  { id: 'camp-3', campaign: 'Performance Bonus H1', occasion: 'performance_bonus', sent: 5, redeemed: 3 },
-  { id: 'camp-4', campaign: 'Welcome Pack — New Hires', occasion: 'welcome', sent: 6, redeemed: 4 },
-]
-
 const BREAKDOWN_TABS = ['Occasion Type', 'Employee', 'Month', 'Budget Consumed'] as const
 type BreakdownTab = (typeof BREAKDOWN_TABS)[number]
-
-const OCCASION_BREAKDOWN = [
-  { label: 'Birthday Gift', gifts: 18, spend: 320000 },
-  { label: 'Work Anniversary', gifts: 9, spend: 210000 },
-  { label: 'Performance Bonus', gifts: 5, spend: 400000 },
-  { label: 'Welcome / Onboarding', gifts: 6, spend: 90000 },
-  { label: 'Compensation', gifts: 3, spend: 150000 },
-]
 
 const STATUS_STYLES: Record<string, string> = {
   Delivered: 'bg-success-50 text-success-500',
@@ -76,6 +54,18 @@ export default function ReportsContent() {
   const [breakdownTab, setBreakdownTab] = useState<BreakdownTab>('Occasion Type')
   const [trackedDelivery, setTrackedDelivery] = useState<PhysicalDelivery | null>(null)
 
+  const { data: overview } = useQuery({ queryKey: ['reports-overview'], queryFn: getReportsOverview })
+  const { data: spendByMonth = [] } = useQuery({ queryKey: ['reports-spend-by-month'], queryFn: getSpendByMonth })
+  const { data: occasionBreakdown = [] } = useQuery({
+    queryKey: ['reports-occasion-breakdown'],
+    queryFn: getOccasionBreakdown,
+  })
+  const { data: campaigns = [] } = useQuery({
+    queryKey: ['reports-campaign-redemptions'],
+    queryFn: getCampaignRedemptions,
+  })
+  const { data: deliveries = [] } = useQuery({ queryKey: ['deliveries'], queryFn: getDeliveries })
+
   const completionRate = useMemo(() => {
     if (employees.length === 0) return 0
     return Math.round((employees.filter((e) => e.profileCompletion === 'Complete').length / employees.length) * 100)
@@ -93,12 +83,14 @@ export default function ReportsContent() {
     [employees]
   )
 
+  const occasionRows = occasionBreakdown.map((o) => ({ label: o.occasion, gifts: o.count, spend: o.spend }))
+
   const chartData = {
-    labels: SPEND_BY_MONTH.map((s) => s.month),
+    labels: spendByMonth.map((s) => s.month),
     datasets: [
       {
         label: 'Gifting spend (₦)',
-        data: SPEND_BY_MONTH.map((s) => s.amount),
+        data: spendByMonth.map((s) => s.amount),
         backgroundColor: 'rgba(26, 26, 188, 0.6)',
         borderRadius: 6,
         maxBarThickness: 36,
@@ -127,12 +119,17 @@ export default function ReportsContent() {
     } else if (breakdownTab === 'Month') {
       downloadCsv('gifting-report-by-month.csv', [
         ['Month', 'Spend (NGN)'],
-        ...SPEND_BY_MONTH.map((r) => [r.month, r.amount]),
+        ...spendByMonth.map((r) => [r.month, r.amount]),
+      ])
+    } else if (breakdownTab === 'Budget Consumed') {
+      downloadCsv('gifting-report-by-rule.csv', [
+        ['Gifting Rule', 'Active', 'Budget (NGN)'],
+        ...rules.map((r) => [r.label, r.enabled ? 1 : 0, r.budget]),
       ])
     } else {
       downloadCsv('gifting-report-by-occasion.csv', [
         ['Occasion Type', 'Gifts Sent', 'Total Spend (NGN)'],
-        ...OCCASION_BREAKDOWN.map((r) => [r.label, r.gifts, r.spend]),
+        ...occasionRows.map((r) => [r.label, r.gifts, r.spend]),
       ])
     }
   }
@@ -144,12 +141,11 @@ export default function ReportsContent() {
       <div className='p-6 lg:p-8'>
       <RequireEmployeesGate pageLabel='Reports'>
       <div className='space-y-6'>
-        <div className='grid grid-cols-2 gap-4 lg:grid-cols-5'>
-          <StatCard label='Total sent' value='41' icon={<Gift className='h-4 w-4 text-primary-500' />} />
-          <StatCard label='Pending' value='4' icon={<Clock3 className='h-4 w-4 text-warning-500' />} iconBg='bg-warning-50' />
-          <StatCard label='Claimed' value='28' icon={<CheckCircle2 className='h-4 w-4 text-information-500' />} iconBg='bg-information-50' />
-          <StatCard label='Delivered' value='35' icon={<Truck className='h-4 w-4 text-success-500' />} iconBg='bg-success-50' />
-          <StatCard label='Failed' value='2' icon={<XCircle className='h-4 w-4 text-error-500' />} iconBg='bg-error-50' />
+        <div className='grid grid-cols-2 gap-4 lg:grid-cols-4'>
+          <StatCard label='Total sent' value={String(overview?.giftsSent ?? 0)} icon={<Gift className='h-4 w-4 text-primary-500' />} />
+          <StatCard label='Pending' value={String(overview?.giftsPending ?? 0)} icon={<Clock3 className='h-4 w-4 text-warning-500' />} iconBg='bg-warning-50' />
+          <StatCard label='Claimed' value={String(overview?.giftsClaimed ?? 0)} icon={<CheckCircle2 className='h-4 w-4 text-information-500' />} iconBg='bg-information-50' />
+          <StatCard label='Employees onboarded' value={String(overview?.employeesOnboarded ?? 0)} icon={<Truck className='h-4 w-4 text-success-500' />} iconBg='bg-success-50' />
         </div>
 
         <div className='rounded-xl border border-grey-100 bg-white p-5'>
@@ -187,7 +183,7 @@ export default function ReportsContent() {
                 <tbody>
                   {(breakdownTab === 'Employee' ? employeeBreakdown : breakdownTab === 'Budget Consumed'
                     ? rules.map((r) => ({ label: r.label, gifts: r.enabled ? 1 : 0, spend: r.budget }))
-                    : OCCASION_BREAKDOWN
+                    : occasionRows
                   ).map((row) => (
                     <tr key={row.label} className='border-b border-grey-50'>
                       <td className='py-2.5 pr-3 text-blackish'>{row.label}</td>
@@ -197,6 +193,9 @@ export default function ReportsContent() {
                   ))}
                   {breakdownTab === 'Employee' && employeeBreakdown.length === 0 && (
                     <tr><td colSpan={3} className='py-6 text-center text-xs text-grey-400'>No gifting activity recorded for employees yet.</td></tr>
+                  )}
+                  {breakdownTab === 'Occasion Type' && occasionRows.length === 0 && (
+                    <tr><td colSpan={3} className='py-6 text-center text-xs text-grey-400'>No gifts sent yet.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -216,21 +215,25 @@ export default function ReportsContent() {
           <div className='rounded-xl border border-grey-100 bg-white p-5'>
             <p className='text-sm font-semibold text-blackish'>Physical Gift Delivery Status</p>
             <div className='mt-3 space-y-3'>
-              {MOCK_DELIVERIES.map((d) => (
-                <div key={d.id} className='rounded-lg border border-grey-100 p-3.5'>
-                  <div className='flex items-center justify-between'>
-                    <p className='text-sm font-medium text-blackish'>{d.employee}</p>
-                    <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLES[d.status]}`}>{d.status}</span>
+              {deliveries.length === 0 ? (
+                <p className='py-6 text-center text-xs text-grey-400'>No physical gifts in transit.</p>
+              ) : (
+                deliveries.map((d) => (
+                  <div key={d.id} className='rounded-lg border border-grey-100 p-3.5'>
+                    <div className='flex items-center justify-between'>
+                      <p className='text-sm font-medium text-blackish'>{d.employee}</p>
+                      <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLES[d.status]}`}>{d.status}</span>
+                    </div>
+                    <p className='mt-1 text-xs text-grey-400'>{d.item}</p>
+                    <button
+                      onClick={() => setTrackedDelivery(d)}
+                      className='mt-1.5 flex items-center gap-1 text-xs font-medium text-primary-500 hover:text-primary-600'
+                    >
+                      <Radio className='h-3 w-3' /> Track in real time
+                    </button>
                   </div>
-                  <p className='mt-1 text-xs text-grey-400'>{d.item}</p>
-                  <button
-                    onClick={() => setTrackedDelivery(d)}
-                    className='mt-1.5 flex items-center gap-1 text-xs font-medium text-primary-500 hover:text-primary-600'
-                  >
-                    <Radio className='h-3 w-3' /> Track in real time
-                  </button>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
 
@@ -239,8 +242,11 @@ export default function ReportsContent() {
             <div className='rounded-xl border border-grey-100 bg-white p-5'>
               <p className='text-sm font-semibold text-blackish'>Voucher Redemption Rate by Campaign</p>
               <div className='mt-3 space-y-4'>
-                {CAMPAIGNS.map((c) => {
-                  const pct = Math.round((c.redeemed / c.sent) * 100)
+                {campaigns.length === 0 && (
+                  <p className='py-4 text-center text-xs text-grey-400'>No campaigns fired yet.</p>
+                )}
+                {campaigns.map((c) => {
+                  const pct = c.sent > 0 ? Math.round((c.redeemed / c.sent) * 100) : 0
                   return (
                     <div key={c.id}>
                       <div className='flex items-center justify-between text-xs'>

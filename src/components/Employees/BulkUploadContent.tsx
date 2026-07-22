@@ -6,20 +6,11 @@ import { useDropzone } from 'react-dropzone'
 import { UploadCloud, FileSpreadsheet, X, Download } from 'lucide-react'
 import DashboardHeader from '@/components/Dashboard/DashboardHeader'
 import SuccessModal from '@/components/Profile/SuccessModal'
-import { useEmployees, type NewEmployeeInput } from '@/context/EmployeesContext'
+import { useEmployees } from '@/context/EmployeesContext'
+import type { ParsedRow } from '@/types/Employee'
+import type { ApiError } from '@/lib/api/client'
 
 const EXPECTED_COLUMNS = ['Name', 'Phone', 'Email', 'Role', 'Department', 'Date of Joining', 'Date of Birth']
-
-type ParsedRow = {
-  name: string
-  phone: string
-  email: string
-  role: string
-  department: string
-  dateOfJoining: string
-  dateOfBirth: string
-  error?: string
-}
 
 const parseCsv = (text: string): ParsedRow[] => {
   const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
@@ -60,10 +51,11 @@ Segun Adebayo,08022233344,segun.adebayo@acme.com,Sales Associate,Sales,2023-08-1
 
 export default function BulkUploadContent() {
   const router = useRouter()
-  const { addEmployees } = useEmployees()
+  const { bulkImportEmployees } = useEmployees()
   const [fileName, setFileName] = useState<string | null>(null)
   const [rows, setRows] = useState<ParsedRow[]>([])
   const [parseError, setParseError] = useState('')
+  const [isImporting, setIsImporting] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
   const [successMessage, setSuccessMessage] = useState('')
 
@@ -114,24 +106,32 @@ export default function BulkUploadContent() {
     URL.revokeObjectURL(url)
   }
 
-  const handleConfirmImport = () => {
-    const inputs: NewEmployeeInput[] = validRows.map((r) => ({
+  const handleConfirmImport = async () => {
+    const importRows = validRows.map((r) => ({
       name: r.name,
       phone: r.phone,
       email: r.email,
       role: r.role || 'Not specified',
       department: r.department || 'Not specified',
       dateOfJoining: r.dateOfJoining || new Date().toISOString().slice(0, 10),
-      dateOfBirth: r.dateOfBirth || '',
-      source: 'spreadsheet',
+      dateOfBirth: r.dateOfBirth || undefined,
     }))
-    addEmployees(inputs)
-    setSuccessMessage(
-      `${inputs.length} employee${inputs.length === 1 ? '' : 's'} imported successfully${
-        invalidRows.length > 0 ? `. ${invalidRows.length} row${invalidRows.length === 1 ? '' : 's'} were skipped due to missing data.` : '.'
-      }`
-    )
-    setShowSuccess(true)
+    setIsImporting(true)
+    setParseError('')
+    try {
+      const result = await bulkImportEmployees(importRows)
+      const skipped = result.skipped + invalidRows.length
+      setSuccessMessage(
+        `${result.created} employee${result.created === 1 ? '' : 's'} imported successfully${
+          skipped > 0 ? `. ${skipped} row${skipped === 1 ? '' : 's'} were skipped due to missing or duplicate data.` : '.'
+        }`
+      )
+      setShowSuccess(true)
+    } catch (err) {
+      setParseError((err as ApiError).message || 'Could not import these employees. Please try again.')
+    } finally {
+      setIsImporting(false)
+    }
   }
 
   return (
@@ -229,11 +229,11 @@ export default function BulkUploadContent() {
                 </button>
                 <button
                   onClick={handleConfirmImport}
-                  disabled={validRows.length === 0}
+                  disabled={validRows.length === 0 || isImporting}
                   className='flex-1 rounded-lg py-2.5 text-sm font-medium text-white transition-all disabled:opacity-50'
                   style={{ background: 'linear-gradient(to bottom, var(--primary-400) 17.5%, var(--primary-600))' }}
                 >
-                  Import {validRows.length} employee{validRows.length === 1 ? '' : 's'}
+                  {isImporting ? 'Importing...' : `Import ${validRows.length} employee${validRows.length === 1 ? '' : 's'}`}
                 </button>
               </div>
             </div>

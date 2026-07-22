@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useQuery } from '@tanstack/react-query'
 import { Gift, Clock, CheckCircle2, Wallet as WalletIcon, ArrowRight, Sparkles } from 'lucide-react'
 import DashboardHeader from '@/components/Dashboard/DashboardHeader'
 import StatCard from '@/components/Dashboard/StatCard'
@@ -10,18 +11,15 @@ import { useAuth } from '@/context/AuthContext'
 import { useGifting } from '@/context/GiftingContext'
 import { useEmployees } from '@/context/EmployeesContext'
 import { useWallet } from '@/context/WalletContext'
+import { getReportsOverview } from '@/lib/api/reports'
+import { listSentGifts } from '@/lib/api/gifts'
 
-const RECENT_ACTIVITY = [
-  { id: 'act-1', employee: 'Adaeze Okonkwo', occasion: 'Birthday Gift', amount: 25000, status: 'Delivered', date: 'Jul 8, 2026' },
-  { id: 'act-2', employee: 'Ngozi Umeh', occasion: 'Performance Bonus', amount: 100000, status: 'Claimed', date: 'Jun 28, 2026' },
-  { id: 'act-3', employee: 'Funmilayo Adewale', occasion: 'Work Anniversary', amount: 25000, status: 'Pending', date: 'Jun 20, 2026' },
-  { id: 'act-4', employee: 'Blessing Effiong', occasion: 'Compensation', amount: 50000, status: 'Delivered', date: 'Jun 15, 2026' },
-]
-
-const STATUS_STYLES: Record<string, string> = {
-  Delivered: 'bg-success-50 text-success-500',
-  Claimed: 'bg-information-50 text-information-500',
-  Pending: 'text-warning-500',
+const STATUS_DISPLAY: Record<string, { label: string; className: string }> = {
+  fulfilled: { label: 'Delivered', className: 'bg-success-50 text-success-500' },
+  claimed: { label: 'Claimed', className: 'bg-information-50 text-information-500' },
+  pending: { label: 'Pending', className: 'text-warning-500' },
+  expired: { label: 'Expired', className: 'bg-grey-100 text-grey-500' },
+  cancelled: { label: 'Cancelled', className: 'bg-grey-100 text-grey-500' },
 }
 
 export default function DashboardPage() {
@@ -30,12 +28,15 @@ export default function DashboardPage() {
   const { employees } = useEmployees()
   const { wallet } = useWallet()
 
+  const { data: overview } = useQuery({ queryKey: ['reports-overview'], queryFn: getReportsOverview })
+  const { data: recentGifts } = useQuery({
+    queryKey: ['gifts-sent', { page: 1, limit: 5 }],
+    queryFn: () => listSentGifts(1, 5),
+  })
+
   const enabledRules = rules.filter((r) => r.enabled)
   const hasGiftingConfigured = enabledRules.length > 0
-
-  const giftsSent = RECENT_ACTIVITY.length + 41
-  const giftsClaimed = 28
-  const giftsPending = RECENT_ACTIVITY.filter((a) => a.status === 'Pending').length + 2
+  const recentActivity = recentGifts?.data ?? []
 
   return (
     <div className='flex flex-col'>
@@ -68,10 +69,10 @@ export default function DashboardPage() {
         )}
 
         <div className='grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4'>
-          <StatCard label='Gifts sent' value={String(giftsSent)} subtitle='All-time gifts triggered' icon={<Gift className='h-4 w-4 text-primary-500' />} />
-          <StatCard label='Gifts claimed' value={String(giftsClaimed)} subtitle='Successfully redeemed' icon={<CheckCircle2 className='h-4 w-4 text-success-500' />} iconBg='bg-success-50' />
-          <StatCard label='Gifts pending' value={String(giftsPending)} subtitle='Awaiting delivery or claim' icon={<Clock className='h-4 w-4 text-warning-500' />} iconBg='bg-warning-50' />
-          <StatCard label='Wallet spend' value={`₦${wallet.spent.toLocaleString()}`} subtitle={`Of ₦${wallet.budgetCap.toLocaleString()} ${wallet.budgetPeriod} budget`} icon={<WalletIcon className='h-4 w-4 text-information-500' />} iconBg='bg-information-50' />
+          <StatCard label='Gifts sent' value={String(overview?.giftsSent ?? 0)} subtitle='All-time gifts triggered' icon={<Gift className='h-4 w-4 text-primary-500' />} />
+          <StatCard label='Gifts claimed' value={String(overview?.giftsClaimed ?? 0)} subtitle='Successfully redeemed' icon={<CheckCircle2 className='h-4 w-4 text-success-500' />} iconBg='bg-success-50' />
+          <StatCard label='Gifts pending' value={String(overview?.giftsPending ?? 0)} subtitle='Awaiting delivery or claim' icon={<Clock className='h-4 w-4 text-warning-500' />} iconBg='bg-warning-50' />
+          <StatCard label='Wallet spend' value={`₦${(overview?.totalSpend ?? 0).toLocaleString()}`} subtitle={`Of ₦${wallet.budgetCap.toLocaleString()} ${wallet.budgetPeriod} budget`} icon={<WalletIcon className='h-4 w-4 text-information-500' />} iconBg='bg-information-50' />
         </div>
 
         <div className='grid grid-cols-1 gap-6 xl:grid-cols-5'>
@@ -80,22 +81,27 @@ export default function DashboardPage() {
               <p className='text-sm font-semibold text-blackish'>Recent Gifting Activity</p>
               <Link href='/reports' className='text-xs font-medium text-primary-500 hover:text-primary-600'>View all</Link>
             </div>
-            {RECENT_ACTIVITY.length === 0 ? (
+            {recentActivity.length === 0 ? (
               <EmptyState message='No gifting activity yet. Configure a rule to get started.' />
             ) : (
               <div className='divide-y divide-grey-50'>
-                {RECENT_ACTIVITY.map((a) => (
-                  <div key={a.id} className='flex items-center justify-between px-5 py-3.5'>
-                    <div>
-                      <p className='text-sm font-medium text-blackish'>{a.employee}</p>
-                      <p className='text-xs text-grey-400'>{a.occasion} &bull; {a.date}</p>
+                {recentActivity.map((a) => {
+                  const status = STATUS_DISPLAY[a.status] ?? STATUS_DISPLAY.pending
+                  return (
+                    <div key={a.id} className='flex items-center justify-between px-5 py-3.5'>
+                      <div>
+                        <p className='text-sm font-medium text-blackish'>{a.recipientIdentifier ?? 'Employee'}</p>
+                        <p className='text-xs text-grey-400'>
+                          {(a.metadata?.occasion as string) ?? 'Gift'} &bull; {new Date(a.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </p>
+                      </div>
+                      <div className='flex items-center gap-3'>
+                        <span className='text-sm text-blackish'>&#8358;{Number(a.amount ?? 0).toLocaleString()}</span>
+                        <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${status.className}`}>{status.label}</span>
+                      </div>
                     </div>
-                    <div className='flex items-center gap-3'>
-                      <span className='text-sm text-blackish'>&#8358;{a.amount.toLocaleString()}</span>
-                      <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLES[a.status]}`}>{a.status}</span>
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </div>

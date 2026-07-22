@@ -2,16 +2,8 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { ArrowLeft, Send, Bot } from 'lucide-react'
-
-interface ChatMessage {
-  id: number
-  from: 'bot' | 'user'
-  text: string
-}
-
-const INITIAL_MESSAGES: ChatMessage[] = [
-  { id: 1, from: 'bot', text: "Hi! I'm the Giftseon Business assistant. Ask me about employees, gifting configuration, budget, or branding." },
-]
+import type { ChatMessage } from '@/types/Support'
+import { INITIAL_MESSAGES } from '@/lib/mockSupport'
 
 const respond = (input: string): string => {
   const q = input.toLowerCase()

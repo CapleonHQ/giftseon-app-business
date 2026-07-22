@@ -1,21 +1,33 @@
 'use client'
 
-import { useState, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useCallback, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import GiftseonLogo from '@/components/Auth/GiftseonLogo'
 import BackToHomeLink from '@/components/Auth/BackToHomeLink'
 import PasswordInput, { PASSWORD_RULES } from '@/components/Auth/PasswordInput'
 import ForgotPasswordIllustration from '@/components/Auth/illustrations/ForgotPasswordIllustration'
 import CreatePasswordIllustration from '@/components/Auth/illustrations/CreatePasswordIllustration'
 import SuccessScreen from '@/components/Auth/SuccessScreen'
+import { useAuth } from '@/context/AuthContext'
+import type { ApiError } from '@/lib/api/client'
 
 export default function ForgotPasswordPage() {
   const router = useRouter()
-  const [step, setStep] = useState<'email' | 'password' | 'success'>('email')
+  const searchParams = useSearchParams()
+  const { forgotPassword, resetPassword } = useAuth()
+  const tokenFromLink = searchParams.get('token')
+  const [step, setStep] = useState<'email' | 'sent' | 'password' | 'success'>(
+    tokenFromLink ? 'password' : 'email'
+  )
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (tokenFromLink) setStep('password')
+  }, [tokenFromLink])
 
   const isPasswordValid = PASSWORD_RULES.every((r) => r.test(password))
   const isPasswordFormValid =
@@ -23,25 +35,47 @@ export default function ForgotPasswordPage() {
 
   const handleSendEmail = useCallback(async () => {
     if (!email) return
+    setError('')
     setIsLoading(true)
-    await new Promise((r) => setTimeout(r, 500))
-    setIsLoading(false)
-    setStep('password')
-  }, [email])
+    try {
+      await forgotPassword(email)
+      setStep('sent')
+    } catch (err) {
+      setError((err as ApiError).message || 'Could not send reset email. Please try again.')
+    } finally {
+      setIsLoading(false)
+    }
+  }, [email, forgotPassword])
 
   const handleCreatePassword = useCallback(async () => {
-    if (!isPasswordFormValid) return
+    if (!isPasswordFormValid || !tokenFromLink) return
+    setError('')
     setIsLoading(true)
-    await new Promise((r) => setTimeout(r, 500))
-    setIsLoading(false)
-    setStep('success')
-  }, [isPasswordFormValid])
+    try {
+      await resetPassword(tokenFromLink, password)
+      setStep('success')
+    } catch (err) {
+      setError((err as ApiError).message || 'Could not reset your password. The link may have expired.')
+    } finally {
+      setIsLoading(false)
+    }
+  }, [isPasswordFormValid, tokenFromLink, password, resetPassword])
 
   if (step === 'success') {
     return (
       <SuccessScreen
         message='Your password has been successfully reset and you can now access your company dashboard.'
         buttonLabel='Go to Login'
+        onAction={() => router.push('/login')}
+      />
+    )
+  }
+
+  if (step === 'sent') {
+    return (
+      <SuccessScreen
+        message={`We've sent a password reset link to ${email}. Open it on this device to set a new password.`}
+        buttonLabel='Back to Login'
         onAction={() => router.push('/login')}
       />
     )
@@ -83,6 +117,11 @@ export default function ForgotPasswordPage() {
 
         <div className='flex flex-1 items-start justify-center px-6 py-8 lg:items-center lg:px-12'>
           <div className='w-full max-w-md'>
+            {error && (
+              <p className='mb-4 rounded-lg border border-error-200 bg-error-50 px-3.5 py-2.5 text-sm text-error-600'>
+                {error}
+              </p>
+            )}
             {isEmailStep ? (
               <form
                 onSubmit={(e) => { e.preventDefault(); handleSendEmail() }}

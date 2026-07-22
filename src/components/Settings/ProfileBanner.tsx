@@ -44,9 +44,9 @@ export default function ProfileBanner({
 
   return (
     <>
-      <div className='relative'>
-        <div className='h-28 rounded-t-xl bg-primary-500 overflow-hidden'>
-          <svg className='h-full w-full' viewBox='0 0 800 120' preserveAspectRatio='none'>
+      <div>
+        <div className='relative h-28 rounded-t-xl bg-primary-500'>
+          <svg className='h-full w-full overflow-hidden rounded-t-xl' viewBox='0 0 800 120' preserveAspectRatio='none'>
             <defs>
               <pattern id='zigzag' width='60' height='120' patternUnits='userSpaceOnUse'>
                 <path d='M0 60 L30 0 L60 60 L30 120 Z' fill='rgba(255,255,255,0.06)' />
@@ -55,35 +55,35 @@ export default function ProfileBanner({
             <rect width='800' height='120' fill='var(--primary-500)' />
             <rect width='800' height='120' fill='url(#zigzag)' />
           </svg>
-        </div>
 
-        <div className='absolute -bottom-10 left-8'>
-          <div className='relative'>
-            <div className='h-20 w-20 rounded-full border-4 border-white bg-grey-100 overflow-hidden'>
-              {(preview || logoUrl) ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={preview || logoUrl}
-                  alt={companyName}
-                  className='h-full w-full object-cover'
-                />
-              ) : (
-                <div className='flex h-full w-full items-center justify-center bg-grey-200 text-2xl font-semibold text-grey-500'>
-                  {companyName.charAt(0)}
-                </div>
-              )}
+          <div className='absolute -bottom-10 left-8'>
+            <div className='relative'>
+              <div className='h-20 w-20 rounded-full border-4 border-white bg-grey-100 overflow-hidden'>
+                {(preview || logoUrl) ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={preview || logoUrl}
+                    alt={companyName}
+                    className='h-full w-full object-cover'
+                  />
+                ) : (
+                  <div className='flex h-full w-full items-center justify-center bg-grey-200 text-2xl font-semibold text-grey-500'>
+                    {companyName.charAt(0)}
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={() => setShowUpload(true)}
+                className='absolute -bottom-0.5 -right-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-primary-500 text-white shadow-sm hover:bg-primary-600 transition-colors'
+              >
+                <Camera className='h-3 w-3' />
+              </button>
             </div>
-            <button
-              onClick={() => setShowUpload(true)}
-              className='absolute -bottom-0.5 -right-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-primary-500 text-white shadow-sm hover:bg-primary-600 transition-colors'
-            >
-              <Camera className='h-3 w-3' />
-            </button>
           </div>
         </div>
 
         <div className='flex items-start justify-between px-8 pt-2'>
-          <div className='pl-24'>
+          <div className='pl-28'>
             <h2 className='text-lg font-semibold text-blackish'>{companyName}</h2>
             <p className='text-sm text-grey-500'>{businessType}</p>
           </div>

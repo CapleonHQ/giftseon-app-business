@@ -1,11 +1,14 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import { Search, Star, Gift, Package } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { Search, Package, Gift } from 'lucide-react'
 import DashboardHeader from '@/components/Dashboard/DashboardHeader'
 import SendGiftModal from '@/components/Employees/SendGiftModal'
-import { MARKETPLACE_CATEGORIES, MARKETPLACE_PRODUCTS } from '@/lib/mockMarketplace'
+import { browseMarketplace } from '@/lib/api/marketplace'
 import type { MarketplaceProduct } from '@/types/Marketplace'
+
+const OCCASIONS = ['Birthday', 'Wedding', 'Graduation', 'Promotion', 'New Baby', 'Just Because']
 
 const BUDGET_RANGES = [
   { label: 'Any budget', min: 0, max: Infinity },
@@ -14,23 +17,39 @@ const BUDGET_RANGES = [
   { label: 'Above ₦50,000', min: 50000, max: Infinity },
 ]
 
+const useDebouncedValue = (value: string, delayMs: number) => {
+  const [debounced, setDebounced] = useState(value)
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(value), delayMs)
+    return () => clearTimeout(timer)
+  }, [value, delayMs])
+  return debounced
+}
+
 export default function MarketplaceContent() {
-  const [category, setCategory] = useState('All')
+  const [occasion, setOccasion] = useState('All')
   const [search, setSearch] = useState('')
   const [budgetIndex, setBudgetIndex] = useState(0)
   const [sendGiftProduct, setSendGiftProduct] = useState<MarketplaceProduct | null>(null)
 
+  const debouncedSearch = useDebouncedValue(search, 400)
   const budgetRange = BUDGET_RANGES[budgetIndex]
 
-  const filtered = useMemo(() => {
-    return MARKETPLACE_PRODUCTS.filter((product) => {
-      const matchCategory = category === 'All' || product.category === category
-      const matchSearch = product.name.toLowerCase().includes(search.toLowerCase()) || product.description.toLowerCase().includes(search.toLowerCase())
-      const effectivePrice = product.wholesaleUnitPrice ?? product.price
-      const matchBudget = effectivePrice >= budgetRange.min && effectivePrice <= budgetRange.max
-      return matchCategory && matchSearch && matchBudget
-    })
-  }, [category, search, budgetRange])
+  const { data, isLoading } = useQuery({
+    queryKey: ['marketplace', { search: debouncedSearch, occasion }],
+    queryFn: () =>
+      browseMarketplace({
+        search: debouncedSearch || undefined,
+        occasion: occasion === 'All' ? undefined : occasion,
+        limit: 60,
+      }),
+  })
+
+  const products = data?.data ?? []
+  const filtered = products.filter((product) => {
+    const effectivePrice = product.wholesaleUnitPrice ?? product.price
+    return effectivePrice >= budgetRange.min && effectivePrice <= budgetRange.max
+  })
 
   return (
     <>
@@ -56,23 +75,27 @@ export default function MarketplaceContent() {
               {BUDGET_RANGES.map((range, i) => <option key={range.label} value={i}>{range.label}</option>)}
             </select>
             <div className='flex flex-wrap gap-1.5'>
-              {['All', ...MARKETPLACE_CATEGORIES].map((c) => (
+              {['All', ...OCCASIONS].map((o) => (
                 <button
-                  key={c}
-                  onClick={() => setCategory(c)}
+                  key={o}
+                  onClick={() => setOccasion(o)}
                   className={`rounded-full border px-3.5 py-1.5 text-xs font-medium transition-colors ${
-                    category === c ? 'border-primary-400 bg-primary-50 text-primary-600' : 'border-grey-200 text-grey-600 hover:bg-grey-50'
+                    occasion === o ? 'border-primary-400 bg-primary-50 text-primary-600' : 'border-grey-200 text-grey-600 hover:bg-grey-50'
                   }`}
                 >
-                  {c}
+                  {o}
                 </button>
               ))}
             </div>
           </div>
 
-          {filtered.length === 0 ? (
+          {isLoading ? (
+            <div className='flex justify-center py-16'>
+              <div className='h-8 w-8 animate-spin rounded-full border-4 border-primary-200 border-t-primary-500' />
+            </div>
+          ) : filtered.length === 0 ? (
             <div className='rounded-xl border border-grey-100 bg-white py-16 text-center text-sm text-grey-400'>
-              No products match your filters. Try a different category or budget range.
+              No products match your filters. Try a different occasion or budget range.
             </div>
           ) : (
             <div className='grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3'>
@@ -82,9 +105,6 @@ export default function MarketplaceContent() {
                     <div className='flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-50'>
                       <Package className='h-5 w-5 text-primary-500' />
                     </div>
-                    <span className='flex items-center gap-1 text-xs text-grey-400'>
-                      <Star className='h-3 w-3 fill-warning-400 text-warning-400' /> {product.rating}
-                    </span>
                   </div>
                   <p className='mt-3 text-sm font-semibold text-blackish'>{product.name}</p>
                   <p className='mt-1 flex-1 text-xs text-grey-500'>{product.description}</p>
@@ -105,7 +125,6 @@ export default function MarketplaceContent() {
                         <p className='text-sm font-semibold text-blackish'>₦{product.price.toLocaleString()}</p>
                       )}
                     </div>
-                    <p className='text-[11px] text-grey-400'>{product.deliveryEstimate}</p>
                   </div>
                   <button
                     onClick={() => setSendGiftProduct(product)}

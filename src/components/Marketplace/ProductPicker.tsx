@@ -1,8 +1,10 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Search, Star, Sparkles } from 'lucide-react'
-import { MARKETPLACE_CATEGORIES, MARKETPLACE_PRODUCTS, getRecommendedProducts } from '@/lib/mockMarketplace'
+import { useQuery } from '@tanstack/react-query'
+import { Search, Sparkles } from 'lucide-react'
+import { getRecommendedProducts } from '@/lib/mockMarketplace'
+import { browseMarketplace } from '@/lib/api/marketplace'
 import type { MarketplaceProduct } from '@/types/Marketplace'
 import type { Employee } from '@/types/Employee'
 import type { CompanyProfile } from '@/types/Company'
@@ -17,23 +19,25 @@ interface ProductPickerProps {
 }
 
 export default function ProductPicker({ selectedId, onSelect, recipientEmployee, company, occasionLabel }: ProductPickerProps) {
-  const [category, setCategory] = useState('All');
   const [search, setSearch] = useState('')
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['marketplace-picker'],
+    queryFn: () => browseMarketplace({ limit: 100 }),
+  })
+  const products = useMemo(() => data?.data ?? [], [data])
 
   const ranked = useMemo(() => {
     if (recipientEmployee) {
-      return getRecommendedProducts(recipientEmployee, company ?? null, occasionLabel).map((r) => ({ product: r.product, reason: r.reason }))
+      return getRecommendedProducts(recipientEmployee, company ?? null, occasionLabel, products).map((r) => ({
+        product: r.product,
+        reason: r.reason,
+      }))
     }
-    return [...MARKETPLACE_PRODUCTS]
-      .sort((a, b) => b.rating - a.rating)
-      .map((product) => ({ product, reason: undefined as string | undefined }))
-  }, [recipientEmployee, company, occasionLabel])
+    return products.map((product) => ({ product, reason: undefined as string | undefined }))
+  }, [recipientEmployee, company, occasionLabel, products])
 
-  const filtered = ranked.filter(({ product }) => {
-    const matchCategory = category === 'All' || product.category === category
-    const matchSearch = product.name.toLowerCase().includes(search.toLowerCase())
-    return matchCategory && matchSearch
-  })
+  const filtered = ranked.filter(({ product }) => product.name.toLowerCase().includes(search.toLowerCase()))
 
   return (
     <div>
@@ -55,24 +59,11 @@ export default function ProductPicker({ selectedId, onSelect, recipientEmployee,
             className='w-36 bg-transparent text-sm text-blackish outline-none placeholder:text-grey-400'
           />
         </div>
-        <div className='flex flex-wrap gap-1.5'>
-          {['All', ...MARKETPLACE_CATEGORIES].map((c) => (
-            <button
-              key={c}
-              type='button'
-              onClick={() => setCategory(c)}
-              className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                category === c ? 'border-primary-400 bg-primary-50 text-primary-600' : 'border-grey-200 text-grey-600 hover:bg-grey-50'
-              }`}
-            >
-              {c}
-            </button>
-          ))}
-        </div>
       </div>
 
       <div className='grid max-h-80 grid-cols-1 gap-3 overflow-y-auto pr-1 sm:grid-cols-2'>
-        {filtered.length === 0 && (
+        {isLoading && <p className='col-span-2 py-6 text-center text-sm text-grey-400'>Loading products…</p>}
+        {!isLoading && filtered.length === 0 && (
           <p className='col-span-2 py-6 text-center text-sm text-grey-400'>No products match your filters.</p>
         )}
         {filtered.map(({ product, reason }) => (
@@ -84,13 +75,7 @@ export default function ProductPicker({ selectedId, onSelect, recipientEmployee,
               selectedId === product.id ? 'border-primary-400 bg-primary-50/30' : 'border-grey-100 hover:border-grey-200'
             }`}
           >
-            <div className='flex items-start justify-between gap-2'>
-              <p className='text-sm font-semibold text-blackish'>{product.name}</p>
-              <span className='flex shrink-0 items-center gap-0.5 text-xs text-grey-400'>
-                <Star className='h-3 w-3 fill-warning-400 text-warning-400' />
-                {product.rating}
-              </span>
-            </div>
+            <p className='text-sm font-semibold text-blackish'>{product.name}</p>
             <p className='mt-1 line-clamp-2 text-xs text-grey-500'>{product.description}</p>
             <div className='mt-2 flex items-center justify-between'>
               <span className='rounded-full bg-grey-100 px-2 py-0.5 text-[11px] font-medium text-grey-600'>{product.giftOptionType}</span>

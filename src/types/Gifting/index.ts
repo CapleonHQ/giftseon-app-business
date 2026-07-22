@@ -10,6 +10,8 @@ export type GiftingTypeKey =
 
 export type GiftFormat = 'Cash' | 'Voucher' | 'Marketplace Item' | 'Custom Gift Pack'
 
+export const GIFT_FORMATS: GiftFormat[] = ['Cash', 'Voucher', 'Marketplace Item', 'Custom Gift Pack']
+
 export interface GiftingTypeDefinition {
   key: GiftingTypeKey
   label: string
