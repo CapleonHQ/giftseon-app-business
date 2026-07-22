@@ -48,3 +48,8 @@ export interface SentGiftsResult {
 
 export const listSentGifts = (page?: number, limit?: number) =>
   request<SentGiftsResult>({ method: 'GET', url: '/gifts/sent', params: { page, limit } })
+
+/** Gifts this company has sent, grouped by employee id — used to populate
+ * each employee's gifting history/count without an N+1 request per row. */
+export const getGiftHistoryByEmployee = () =>
+  request<Record<string, BackendGift[]>>({ method: 'GET', url: '/gifts/by-employee' })

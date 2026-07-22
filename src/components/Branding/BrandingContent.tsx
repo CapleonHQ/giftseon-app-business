@@ -19,7 +19,7 @@ const WRAPPERS = [
 
 export default function BrandingContent() {
   const { company } = useAuth()
-  const { branding, updateBranding } = useBranding()
+  const { branding, updateBranding, isSaving, saveError } = useBranding()
   const [showSuccess, setShowSuccess] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const [customHex, setCustomHex] = useState(branding.brandColor)
@@ -32,7 +32,7 @@ export default function BrandingContent() {
   }
 
   const handleSave = () => {
-    setShowSuccess(true)
+    if (!saveError) setShowSuccess(true)
   }
 
   return (
@@ -42,6 +42,11 @@ export default function BrandingContent() {
         <p className='mb-6 max-w-2xl text-xs text-grey-500'>
           When a recipient opens a gift notification or claim page from {company?.companyName || 'your company'}, they&apos;ll see your branding — not generic Giftseon branding.
         </p>
+        {saveError && (
+          <div className='mb-6 max-w-2xl rounded-lg border border-error-200 bg-error-50 px-3.5 py-2.5 text-sm text-error-600'>
+            {saveError}
+          </div>
+        )}
 
         <div className='grid grid-cols-1 gap-6 xl:grid-cols-5'>
           {/* Controls */}
@@ -155,10 +160,11 @@ export default function BrandingContent() {
 
             <button
               onClick={handleSave}
-              className='w-full rounded-xl py-3 text-sm font-medium text-white transition-all sm:w-auto sm:px-8'
+              disabled={isSaving}
+              className='w-full rounded-xl py-3 text-sm font-medium text-white transition-all disabled:opacity-60 sm:w-auto sm:px-8'
               style={{ background: 'linear-gradient(to bottom, var(--primary-400) 17.5%, var(--primary-600))' }}
             >
-              Save branding
+              {isSaving ? 'Saving...' : 'Save branding'}
             </button>
           </div>
 

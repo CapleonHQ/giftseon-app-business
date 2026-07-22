@@ -1,17 +1,24 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { CheckCircle2, ArrowLeft, ArrowRight } from 'lucide-react'
 import GiftseonLogo from '@/components/Auth/GiftseonLogo'
-import { getOnboardingCompany, INTEREST_CATEGORIES } from '@/lib/mockCompanyBranding'
+import { INTEREST_CATEGORIES } from '@/lib/mockCompanyBranding'
+import { getOnboardingInvite, registerOnboarding, verifyOnboarding } from '@/lib/api/onboarding'
+import type { ApiError } from '@/lib/api/client'
 
 const STEP_LABELS = ['Account', 'Delivery Address', 'Gift Preferences', 'Confirm']
+const DEFAULT_BRAND_COLOR = '#1A1ABC'
 
 export default function EmployeeOnboardingContent({ token }: { token: string }) {
-  const company = useMemo(() => getOnboardingCompany(token), [token])
+  const { data: invite, isLoading, error: inviteError } = useQuery({
+    queryKey: ['onboarding-invite', token],
+    queryFn: () => getOnboardingInvite(token),
+    retry: false,
+  })
 
   const [step, setStep] = useState(1)
-  const [mode, setMode] = useState<'create' | 'login'>('create')
 
   // Step 1 — account
   const [fullName, setFullName] = useState('')
@@ -26,7 +33,15 @@ export default function EmployeeOnboardingContent({ token }: { token: string }) 
   // Step 3 — interests
   const [selectedInterests, setSelectedInterests] = useState<Set<string>>(new Set())
 
+  // Step 5 — OTP
+  const [otp, setOtp] = useState('')
+
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [submitError, setSubmitError] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const brandColor = DEFAULT_BRAND_COLOR
+  const companyName = invite?.company.businessName ?? 'Your Employer'
 
   const toggleInterest = (option: string) => {
     setSelectedInterests((prev) => {
@@ -40,9 +55,10 @@ export default function EmployeeOnboardingContent({ token }: { token: string }) 
   const validateStep = () => {
     const next: Record<string, string> = {}
     if (step === 1) {
-      if (!fullName.trim() && mode === 'create') next.fullName = 'Enter your full name'
+      if (!fullName.trim()) next.fullName = 'Enter your full name'
       if (!email.trim()) next.email = 'Enter your email address'
-      if (!password.trim()) next.password = mode === 'create' ? 'Create a password' : 'Enter your password'
+      if (!password.trim()) next.password = 'Create a password'
+      else if (password.length < 7) next.password = 'Password must be at least 7 characters'
     }
     if (step === 2) {
       if (!addressLine.trim()) next.addressLine = 'Enter your delivery address'
@@ -60,17 +76,105 @@ export default function EmployeeOnboardingContent({ token }: { token: string }) 
 
   const goBack = () => setStep((s) => Math.max(1, s - 1))
 
-  if (step === 5) {
+  const handleConfirm = async () => {
+    setSubmitError('')
+    setIsSubmitting(true)
+    try {
+      await registerOnboarding(token, {
+        fullName,
+        email,
+        password,
+        address: { street: addressLine, city, state },
+        interests: Array.from(selectedInterests),
+      })
+      setStep(5)
+    } catch (err) {
+      setSubmitError((err as ApiError).message || 'Could not create your account. Please try again.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleVerify = async () => {
+    if (otp.trim().length !== 6) {
+      setSubmitError('Enter the 6-digit code sent to your email')
+      return
+    }
+    setSubmitError('')
+    setIsSubmitting(true)
+    try {
+      await verifyOnboarding(token, otp.trim())
+      setStep(6)
+    } catch (err) {
+      setSubmitError((err as ApiError).message || 'Invalid or expired code. Please try again.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className='flex min-h-screen items-center justify-center bg-grey-50/40'>
+        <div className='h-8 w-8 animate-spin rounded-full border-4 border-primary-200 border-t-primary-500' />
+      </div>
+    )
+  }
+
+  if (inviteError || !invite) {
+    return (
+      <div className='flex min-h-screen flex-col items-center justify-center bg-grey-50/40 px-6 text-center'>
+        <h1 className='text-lg font-semibold text-blackish'>Invite link invalid</h1>
+        <p className='mt-2 max-w-sm text-sm text-grey-400'>
+          This invite link is invalid or has expired. Ask your employer to send you a new one.
+        </p>
+      </div>
+    )
+  }
+
+  if (step === 6) {
     return (
       <div className='flex min-h-screen flex-col items-center justify-center bg-grey-50/40 px-6 py-12'>
         <div className='w-full max-w-md rounded-2xl bg-white p-10 text-center shadow-sm border border-grey-50'>
-          <div className='mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full' style={{ backgroundColor: `${company.brandColor}1A` }}>
-            <CheckCircle2 className='h-9 w-9' style={{ color: company.brandColor }} />
+          <div className='mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full' style={{ backgroundColor: `${brandColor}1A` }}>
+            <CheckCircle2 className='h-9 w-9' style={{ color: brandColor }} />
           </div>
           <h2 className='text-xl font-semibold text-blackish'>You&apos;re all set!</h2>
           <p className='mt-2 text-sm leading-relaxed text-grey-600'>
-            {company.companyName} will now be able to celebrate you on Giftseon — birthdays, work anniversaries, and more, sent straight to your preferences.
+            {companyName} will now be able to celebrate you on Giftseon — birthdays, work anniversaries, and more, sent straight to your preferences.
           </p>
+        </div>
+      </div>
+    )
+  }
+
+  if (step === 5) {
+    return (
+      <div className='flex min-h-screen flex-col items-center justify-center bg-grey-50/40 px-6 py-12'>
+        <div className='w-full max-w-md rounded-2xl bg-white p-8 shadow-sm border border-grey-50'>
+          <h2 className='text-xl font-semibold text-blackish'>Verify your email</h2>
+          <p className='mt-2 text-sm leading-relaxed text-grey-600'>
+            Enter the 6-digit code we sent to {email} to finish setting up your account.
+          </p>
+          {submitError && <p className='mt-4 rounded-lg border border-error-200 bg-error-50 px-3.5 py-2.5 text-sm text-error-600'>{submitError}</p>}
+          <div className='mt-5 space-y-1.5'>
+            <label className='block text-sm font-medium text-blackish'>Verification Code</label>
+            <input
+              type='text'
+              value={otp}
+              onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              placeholder='000000'
+              className='form-input text-center tracking-[0.5em]'
+              maxLength={6}
+            />
+          </div>
+          <button
+            onClick={handleVerify}
+            disabled={isSubmitting}
+            className='mt-6 w-full rounded-lg py-2.5 text-sm font-medium text-white transition-all disabled:opacity-60'
+            style={{ backgroundColor: brandColor }}
+          >
+            {isSubmitting ? 'Verifying...' : 'Verify & Finish'}
+          </button>
         </div>
       </div>
     )
@@ -78,17 +182,17 @@ export default function EmployeeOnboardingContent({ token }: { token: string }) 
 
   return (
     <div className='flex min-h-screen flex-col bg-grey-50/40'>
-      <header className='flex items-center justify-between px-6 py-5 lg:px-12' style={{ backgroundColor: company.brandColor }}>
+      <header className='flex items-center justify-between px-6 py-5 lg:px-12' style={{ backgroundColor: brandColor }}>
         <div className='flex items-center gap-3'>
-          {company.logo ? (
+          {invite.company.logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={company.logo} alt={company.companyName} className='h-8 w-8 rounded object-cover' />
+            <img src={invite.company.logoUrl} alt={companyName} className='h-8 w-8 rounded object-cover' />
           ) : (
             <div className='flex h-8 w-8 items-center justify-center rounded-full bg-white/20 text-sm font-semibold text-white'>
-              {company.companyName.charAt(0)}
+              {companyName.charAt(0)}
             </div>
           )}
-          <span className='text-sm font-semibold text-white'>{company.companyName}</span>
+          <span className='text-sm font-semibold text-white'>{companyName}</span>
         </div>
         <GiftseonLogo className='h-6 w-auto brightness-0 invert' />
       </header>
@@ -97,7 +201,7 @@ export default function EmployeeOnboardingContent({ token }: { token: string }) 
         <div className='w-full max-w-lg'>
           <div className='mb-6 text-center'>
             <h1 className='text-xl font-bold text-blackish sm:text-2xl'>
-              {company.companyName} invited you to Giftseon
+              {companyName} invited you to Giftseon
             </h1>
             <p className='mt-1.5 text-sm text-grey-500'>
               Set up your profile so they can celebrate your birthdays, anniversaries, and milestones automatically.
@@ -111,7 +215,7 @@ export default function EmployeeOnboardingContent({ token }: { token: string }) 
                 <div key={label} className='flex items-center gap-2'>
                   <div
                     className='flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold text-white'
-                    style={{ backgroundColor: n <= step ? company.brandColor : 'var(--grey-200)' }}
+                    style={{ backgroundColor: n <= step ? brandColor : 'var(--grey-200)' }}
                   >
                     {n}
                   </div>
@@ -124,35 +228,18 @@ export default function EmployeeOnboardingContent({ token }: { token: string }) 
           <div className='rounded-xl border border-grey-100 bg-white p-6'>
             {step === 1 && (
               <div className='space-y-5'>
-                <div className='flex gap-2 rounded-lg bg-grey-50 p-1'>
-                  <button
-                    onClick={() => setMode('create')}
-                    className={`flex-1 rounded-md py-2 text-sm font-medium transition-colors ${mode === 'create' ? 'bg-white shadow-sm text-blackish' : 'text-grey-500'}`}
-                  >
-                    Create account
-                  </button>
-                  <button
-                    onClick={() => setMode('login')}
-                    className={`flex-1 rounded-md py-2 text-sm font-medium transition-colors ${mode === 'login' ? 'bg-white shadow-sm text-blackish' : 'text-grey-500'}`}
-                  >
-                    I already have an account
-                  </button>
+                <div className='space-y-1.5'>
+                  <label className='block text-sm font-medium text-blackish'>Full Name</label>
+                  <input type='text' value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder='Enter your full name' className={`form-input ${errors.fullName ? 'border-error-400' : ''}`} />
+                  {errors.fullName && <p className='text-xs text-error-500'>{errors.fullName}</p>}
                 </div>
-
-                {mode === 'create' && (
-                  <div className='space-y-1.5'>
-                    <label className='block text-sm font-medium text-blackish'>Full Name</label>
-                    <input type='text' value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder='Enter your full name' className={`form-input ${errors.fullName ? 'border-error-400' : ''}`} />
-                    {errors.fullName && <p className='text-xs text-error-500'>{errors.fullName}</p>}
-                  </div>
-                )}
                 <div className='space-y-1.5'>
                   <label className='block text-sm font-medium text-blackish'>Email Address</label>
                   <input type='email' value={email} onChange={(e) => setEmail(e.target.value)} placeholder='Enter your email address' className={`form-input ${errors.email ? 'border-error-400' : ''}`} />
                   {errors.email && <p className='text-xs text-error-500'>{errors.email}</p>}
                 </div>
                 <div className='space-y-1.5'>
-                  <label className='block text-sm font-medium text-blackish'>{mode === 'create' ? 'Create Password' : 'Password'}</label>
+                  <label className='block text-sm font-medium text-blackish'>Create Password</label>
                   <input type='password' value={password} onChange={(e) => setPassword(e.target.value)} placeholder='Enter a password' className={`form-input ${errors.password ? 'border-error-400' : ''}`} />
                   {errors.password && <p className='text-xs text-error-500'>{errors.password}</p>}
                 </div>
@@ -184,7 +271,7 @@ export default function EmployeeOnboardingContent({ token }: { token: string }) 
 
             {step === 3 && (
               <div className='space-y-5'>
-                <p className='text-sm text-grey-500'>Pick what you&apos;d love to receive — this stays private to you and is never shared with {company.companyName}.</p>
+                <p className='text-sm text-grey-500'>Pick what you&apos;d love to receive — this stays private to you and is never shared with {companyName}.</p>
                 {INTEREST_CATEGORIES.map((cat) => (
                   <div key={cat.category}>
                     <p className='mb-2 text-sm font-semibold text-blackish'>{cat.category}</p>
@@ -199,7 +286,7 @@ export default function EmployeeOnboardingContent({ token }: { token: string }) 
                             className='rounded-full border px-3.5 py-1.5 text-xs font-medium transition-colors'
                             style={
                               active
-                                ? { backgroundColor: `${company.brandColor}1A`, borderColor: company.brandColor, color: company.brandColor }
+                                ? { backgroundColor: `${brandColor}1A`, borderColor: brandColor, color: brandColor }
                                 : { borderColor: 'var(--grey-200)', color: 'var(--grey-600)' }
                             }
                           >
@@ -222,7 +309,8 @@ export default function EmployeeOnboardingContent({ token }: { token: string }) 
                   <div className='flex justify-between'><span className='text-grey-400'>Delivery Address</span><span className='text-right font-medium text-blackish'>{addressLine}, {city}, {state}</span></div>
                   <div className='flex justify-between'><span className='text-grey-400'>Interests selected</span><span className='font-medium text-blackish'>{selectedInterests.size}</span></div>
                 </div>
-                <p className='text-xs text-grey-400'>By confirming, you allow {company.companyName} to send you gifts via Giftseon for birthdays, anniversaries, and company occasions.</p>
+                <p className='text-xs text-grey-400'>By confirming, you allow {companyName} to send you gifts via Giftseon for birthdays, anniversaries, and company occasions.</p>
+                {submitError && <p className='rounded-lg border border-error-200 bg-error-50 px-3.5 py-2.5 text-sm text-error-600'>{submitError}</p>}
               </div>
             )}
 
@@ -233,12 +321,12 @@ export default function EmployeeOnboardingContent({ token }: { token: string }) 
                 </button>
               )}
               {step < 4 ? (
-                <button onClick={goNext} className='flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2.5 text-sm font-medium text-white transition-all' style={{ backgroundColor: company.brandColor }}>
+                <button onClick={goNext} className='flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2.5 text-sm font-medium text-white transition-all' style={{ backgroundColor: brandColor }}>
                   Continue <ArrowRight className='h-4 w-4' />
                 </button>
               ) : (
-                <button onClick={() => setStep(5)} className='flex-1 rounded-lg py-2.5 text-sm font-medium text-white transition-all' style={{ backgroundColor: company.brandColor }}>
-                  Confirm & Finish
+                <button onClick={handleConfirm} disabled={isSubmitting} className='flex-1 rounded-lg py-2.5 text-sm font-medium text-white transition-all disabled:opacity-60' style={{ backgroundColor: brandColor }}>
+                  {isSubmitting ? 'Creating account...' : 'Confirm & Finish'}
                 </button>
               )}
             </div>

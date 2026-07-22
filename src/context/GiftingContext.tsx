@@ -9,7 +9,7 @@ type GiftingContextValue = {
   rules: GiftingRule[]
   isLoading: boolean
   addRule: (rule: Omit<GiftingRule, 'id' | 'createdAt' | 'trigger'>) => Promise<GiftingRule>
-  updateRule: (id: string, updates: Partial<GiftingRule>) => void
+  updateRule: (id: string, updates: Partial<GiftingRule>) => Promise<GiftingRule>
   toggleRule: (id: string) => void
   getRuleForType: (typeKey: string) => GiftingRule | undefined
 }
@@ -58,8 +58,8 @@ export const GiftingProvider = ({ children }: { children: ReactNode }) => {
       isActive: rule.enabled,
     })
 
-  const updateRule = (id: string, updates: Partial<GiftingRule>) => {
-    updateMutation.mutate({
+  const updateRule = (id: string, updates: Partial<GiftingRule>) =>
+    updateMutation.mutateAsync({
       id,
       updates: {
         ...(updates.label !== undefined && { label: updates.label }),
@@ -73,7 +73,6 @@ export const GiftingProvider = ({ children }: { children: ReactNode }) => {
         ...(updates.enabled !== undefined && { isActive: updates.enabled }),
       },
     })
-  }
 
   const toggleRule = (id: string) => {
     toggleMutation.mutate(id)

@@ -17,10 +17,22 @@ export interface BackendContact {
   updatedAt: string
 }
 
-/**
- * profileCompletion/interestsSet/giftHistory have no dedicated backend query
- * yet — defaulted here (known display gap, not blocking).
- */
+// A profile is "Complete" once every field gifting automation depends on is
+// present — missing any of these means gifts need manual follow-up.
+const isProfileComplete = (contact: BackendContact): boolean =>
+  Boolean(
+    contact.name?.trim() &&
+      contact.email?.trim() &&
+      contact.phone?.trim() &&
+      contact.department?.trim() &&
+      contact.role?.trim() &&
+      contact.dateOfJoining &&
+      contact.dateOfBirth,
+  )
+
+// giftHistory is intentionally left empty here — this mapper only has the
+// employee record to work with. EmployeesContext merges in real gift data
+// (from /gifts/by-employee) after this runs; see toGiftHistoryItem there.
 const toEmployee = (contact: BackendContact): Employee => ({
   id: contact.id,
   name: contact.name,
@@ -31,7 +43,7 @@ const toEmployee = (contact: BackendContact): Employee => ({
   role: contact.role ?? '',
   dateOfJoining: contact.dateOfJoining ?? '',
   dateOfBirth: contact.dateOfBirth ?? '',
-  profileCompletion: 'Incomplete',
+  profileCompletion: isProfileComplete(contact) ? 'Complete' : 'Incomplete',
   interestsSet: Boolean(contact.linkedUserId),
   giftHistory: [],
   source: contact.giftseonTag ? 'tag' : 'manual',
@@ -94,6 +106,7 @@ export const addEmployeesByTags = async (payload: AddEmployeesByTagPayload) => {
     created: BackendContact[]
     resolvedCount: number
     unresolvedCount: number
+    duplicateCount: number
   }>({ method: 'POST', url: '/employees/by-tags', data: payload })
   return { ...result, created: result.created.map(toEmployee) }
 }
@@ -116,3 +129,13 @@ export const bulkImportEmployees = async (rows: BulkImportRow[]) => {
   })
   return { ...result, contacts: result.contacts.map(toEmployee) }
 }
+
+export interface ResolvedTag {
+  tag: string
+  name: string
+  phone?: string
+  email?: string
+}
+
+export const resolveTag = async (tag: string): Promise<ResolvedTag | null> =>
+  request<ResolvedTag | null>({ method: 'GET', url: '/employees/resolve-tag', params: { tag } })

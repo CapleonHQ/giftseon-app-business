@@ -33,7 +33,11 @@ export default function LoginPage() {
       router.replace(next && next.startsWith('/') ? next : '/dashboard')
     } catch (err) {
       const apiError = err as ApiError
-      if (apiError.statusCode === 401 && apiError.message.toLowerCase().includes('otp')) {
+      const needsVerification =
+        apiError.statusCode === 401 &&
+        (apiError.message.toLowerCase().includes('verify your email') ||
+          apiError.message.toLowerCase().includes('otp'))
+      if (needsVerification) {
         router.push(`/register?step=otp&email=${encodeURIComponent(email)}`)
         return
       }

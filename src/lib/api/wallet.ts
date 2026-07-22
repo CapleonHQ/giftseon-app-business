@@ -17,21 +17,20 @@ interface BackendWalletResponse {
   withdrawableBalance: number
   currency: string
   virtualAccount: BackendVirtualAccount | null
+  spent: number
+  escrow: number
   budgetCap?: number
   budgetPeriod: 'monthly' | 'annual'
   lowBalanceThreshold?: number
   spendLimits: GiftTypeSpendLimit[]
 }
 
-/**
- * Backend's wallet overview has no "spent"/"escrow" concept and no virtual
- * account reference field — defaulted here (known display gap; spent/escrow
- * would need a dedicated aggregation endpoint that doesn't exist yet).
- */
+// Backend has no virtual account reference field yet — defaulted here (known
+// display gap, not blocking).
 const toCompanyWallet = (res: BackendWalletResponse): CompanyWallet => ({
   available: Number(res.withdrawableBalance ?? res.balance ?? 0),
-  spent: 0,
-  escrow: 0,
+  spent: Number(res.spent ?? 0),
+  escrow: Number(res.escrow ?? 0),
   budgetCap: Number(res.budgetCap ?? 0),
   budgetPeriod: res.budgetPeriod ?? 'monthly',
   lowBalanceThreshold: Number(res.lowBalanceThreshold ?? 0),
@@ -103,20 +102,10 @@ export interface UpdateBudgetPayload {
 }
 
 export const updateBudget = async (payload: UpdateBudgetPayload): Promise<WalletOverview['wallet']> => {
-  const res = await request<{
-    budgetCap?: number
-    budgetPeriod: 'monthly' | 'annual'
-    lowBalanceThreshold?: number
-  }>({ method: 'PUT', url: '/company/wallet/budget', data: payload })
-  return {
-    available: 0,
-    spent: 0,
-    escrow: 0,
-    budgetCap: Number(res.budgetCap ?? 0),
-    budgetPeriod: res.budgetPeriod,
-    lowBalanceThreshold: Number(res.lowBalanceThreshold ?? 0),
-    virtualAccountNumber: '',
-    virtualAccountBank: '',
-    virtualAccountReference: '',
-  }
+  const res = await request<BackendWalletResponse>({
+    method: 'PUT',
+    url: '/company/wallet/budget',
+    data: payload,
+  })
+  return toCompanyWallet(res)
 }

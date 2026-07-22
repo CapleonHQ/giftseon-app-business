@@ -1,10 +1,12 @@
 'use client'
 
 import { useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft } from 'lucide-react'
 import SuccessModal from '@/components/Profile/SuccessModal'
-import type { Ticket, TicketStatus } from '@/types/Support'
-import { INITIAL_TICKETS } from '@/lib/mockSupport'
+import type { TicketStatus } from '@/types/Support'
+import * as supportApi from '@/lib/api/support'
+import type { ApiError } from '@/lib/api/client'
 
 const STATUS_STYLES: Record<TicketStatus, string> = {
   Open: 'bg-warning-50 text-warning-500',
@@ -12,13 +14,32 @@ const STATUS_STYLES: Record<TicketStatus, string> = {
   Resolved: 'bg-success-50 text-success-500',
 }
 
+const TICKETS_QUERY_KEY = ['support-tickets'] as const
+
 export default function ChatAgentView({ onBack }: { onBack: () => void }) {
-  const [tickets, setTickets] = useState<Ticket[]>(INITIAL_TICKETS)
+  const queryClient = useQueryClient()
+  const { data: tickets = [], isLoading } = useQuery({
+    queryKey: TICKETS_QUERY_KEY,
+    queryFn: supportApi.listTickets,
+  })
+
   const [subject, setSubject] = useState('')
   const [description, setDescription] = useState('')
   const [priority, setPriority] = useState<'Low' | 'Medium' | 'High'>('Medium')
   const [error, setError] = useState('')
   const [showSuccess, setShowSuccess] = useState(false)
+
+  const createMutation = useMutation({
+    mutationFn: supportApi.createTicket,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: TICKETS_QUERY_KEY })
+      setSubject('')
+      setDescription('')
+      setPriority('Medium')
+      setShowSuccess(true)
+    },
+    onError: (err) => setError((err as unknown as ApiError).message || 'Could not create ticket. Please try again.'),
+  })
 
   const handleSubmit = () => {
     if (!subject.trim() || !description.trim()) {
@@ -26,19 +47,7 @@ export default function ChatAgentView({ onBack }: { onBack: () => void }) {
       return
     }
     setError('')
-    const ticket: Ticket = {
-      id: `TCK-${Math.floor(1000 + Math.random() * 8999)}`,
-      subject,
-      description,
-      priority,
-      status: 'Open',
-      createdAt: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-    }
-    setTickets((prev) => [ticket, ...prev])
-    setSubject('')
-    setDescription('')
-    setPriority('Medium')
-    setShowSuccess(true)
+    createMutation.mutate({ subject, description, priority })
   }
 
   return (
@@ -72,28 +81,39 @@ export default function ChatAgentView({ onBack }: { onBack: () => void }) {
             {error && <p className='text-sm text-error-500'>{error}</p>}
             <button
               onClick={handleSubmit}
-              className='w-full rounded-lg py-2.5 text-sm font-medium text-white transition-all'
+              disabled={createMutation.isPending}
+              className='w-full rounded-lg py-2.5 text-sm font-medium text-white transition-all disabled:opacity-60'
               style={{ background: 'linear-gradient(to bottom, var(--primary-400) 17.5%, var(--primary-600))' }}
             >
-              Submit ticket
+              {createMutation.isPending ? 'Submitting...' : 'Submit ticket'}
             </button>
           </div>
         </div>
 
         <div className='mt-6'>
           <h4 className='mb-3 text-sm font-semibold text-blackish'>Your tickets</h4>
-          <div className='space-y-2'>
-            {tickets.map((ticket) => (
-              <div key={ticket.id} className='rounded-lg border border-grey-100 bg-white p-4'>
-                <div className='flex items-center justify-between'>
-                  <p className='text-sm font-medium text-blackish'>{ticket.subject}</p>
-                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLES[ticket.status]}`}>{ticket.status}</span>
+          {isLoading ? (
+            <p className='text-sm text-grey-400'>Loading tickets…</p>
+          ) : tickets.length === 0 ? (
+            <p className='rounded-lg border border-dashed border-grey-200 py-6 text-center text-sm text-grey-400'>
+              No tickets yet.
+            </p>
+          ) : (
+            <div className='space-y-2'>
+              {tickets.map((ticket) => (
+                <div key={ticket.id} className='rounded-lg border border-grey-100 bg-white p-4'>
+                  <div className='flex items-center justify-between'>
+                    <p className='text-sm font-medium text-blackish'>{ticket.subject}</p>
+                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLES[ticket.status]}`}>{ticket.status}</span>
+                  </div>
+                  <p className='mt-1 text-xs text-grey-400'>
+                    {new Date(ticket.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} · {ticket.priority} priority
+                  </p>
+                  <p className='mt-2 text-sm text-grey-600'>{ticket.description}</p>
                 </div>
-                <p className='mt-1 text-xs text-grey-400'>{ticket.id} · {ticket.createdAt} · {ticket.priority} priority</p>
-                <p className='mt-2 text-sm text-grey-600'>{ticket.description}</p>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

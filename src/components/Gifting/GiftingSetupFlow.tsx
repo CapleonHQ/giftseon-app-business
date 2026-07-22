@@ -85,7 +85,10 @@ export default function GiftingSetupFlow() {
 
   const insertToken = () => setMessage((m) => `${m}${m.endsWith(' ') || m === '' ? '' : ' '}{{employeeName}}`)
 
-  const handleSave = useCallback(() => {
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
+
+  const handleSave = useCallback(async () => {
     if (!typeKey || !giftFormat) return
     const label = typeKey === 'custom' ? customLabel.trim() || 'Custom Occasion' : selectedDef?.label || typeKey
     const trigger = typeKey === 'custom'
@@ -105,12 +108,20 @@ export default function GiftingSetupFlow() {
       enabled: existingRule ? existingRule.enabled : true,
     }
 
-    if (existingRule) {
-      updateRule(existingRule.id, payload)
-    } else {
-      addRule(payload)
+    setSaveError('')
+    setIsSaving(true)
+    try {
+      if (existingRule) {
+        await updateRule(existingRule.id, payload)
+      } else {
+        await addRule(payload)
+      }
+      setShowSuccess(true)
+    } catch (err) {
+      setSaveError((err as { message?: string }).message || 'Could not save this gifting rule. Please try again.')
+    } finally {
+      setIsSaving(false)
     }
-    setShowSuccess(true)
   }, [typeKey, giftFormat, customLabel, customTriggerDate, selectedDef, budget, message, variesByTier, tiers, existingRule, addRule, updateRule])
 
   return (
@@ -306,6 +317,7 @@ export default function GiftingSetupFlow() {
                     <p className='mt-1 text-blackish'>{message}</p>
                   </div>
                 </div>
+                {saveError && <p className='text-xs text-error-500'>{saveError}</p>}
               </div>
             )}
 
@@ -320,8 +332,8 @@ export default function GiftingSetupFlow() {
                   Continue <ArrowRight className='h-4 w-4' />
                 </button>
               ) : (
-                <button type='button' onClick={handleSave} className='flex-1 rounded-lg py-2.5 text-sm font-medium text-white transition-all' style={{ background: 'linear-gradient(to bottom, var(--primary-400) 17.5%, var(--primary-600))' }}>
-                  Save gifting rule
+                <button type='button' onClick={handleSave} disabled={isSaving} className='flex-1 rounded-lg py-2.5 text-sm font-medium text-white transition-all disabled:opacity-60' style={{ background: 'linear-gradient(to bottom, var(--primary-400) 17.5%, var(--primary-600))' }}>
+                  {isSaving ? 'Saving...' : 'Save gifting rule'}
                 </button>
               )}
             </div>

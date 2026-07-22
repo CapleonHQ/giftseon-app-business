@@ -3,8 +3,20 @@ import Cookies from 'js-cookie'
 
 const AUTH_COOKIE = 'giftseon_business_token'
 
+const requireEnv = (value: string | undefined, name: string): string => {
+  if (!value && process.env.NODE_ENV !== 'production') {
+    throw new Error(`Missing required environment variable: ${name}`)
+  }
+  return value ?? ''
+}
+
+const API_BASE_URL = requireEnv(
+  process.env.NEXT_PUBLIC_BUSINESS_API_URL,
+  'NEXT_PUBLIC_BUSINESS_API_URL'
+)
+
 export const apiClient = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_BUSINESS_API_URL || 'http://localhost:3006/api/v1',
+  baseURL: API_BASE_URL,
 })
 
 apiClient.interceptors.request.use((config) => {

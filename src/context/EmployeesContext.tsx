@@ -2,8 +2,27 @@
 
 import { createContext, useContext, useMemo, type ReactNode } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import type { Employee } from '@/types/Employee'
+import type { Employee, EmployeeGiftHistoryItem } from '@/types/Employee'
 import * as employeesApi from '@/lib/api/employees'
+import * as giftsApi from '@/lib/api/gifts'
+
+export const GIFT_HISTORY_QUERY_KEY = ['employees', 'gift-history'] as const
+
+const GIFT_STATUS_MAP: Record<string, EmployeeGiftHistoryItem['status']> = {
+  pending: 'Pending',
+  claimed: 'Claimed',
+  fulfilled: 'Delivered',
+  expired: 'Failed',
+  cancelled: 'Failed',
+}
+
+const toGiftHistoryItem = (gift: giftsApi.BackendGift): EmployeeGiftHistoryItem => ({
+  id: gift.id,
+  occasion: (gift.metadata?.occasion as string) || 'Gift',
+  date: gift.createdAt,
+  amount: Number(gift.amount) || 0,
+  status: GIFT_STATUS_MAP[gift.status] ?? 'Pending',
+})
 
 export type NewEmployeeInput = Omit<
   Employee,
@@ -13,6 +32,7 @@ export type NewEmployeeInput = Omit<
 export interface AddByTagResult {
   resolvedCount: number
   unresolvedCount: number
+  duplicateCount: number
 }
 
 export interface BulkImportResult {
@@ -43,9 +63,22 @@ export const EmployeesProvider = ({ children }: { children: ReactNode }) => {
 
   const { data, isLoading } = useQuery({
     queryKey: EMPLOYEES_QUERY_KEY,
-    queryFn: () => employeesApi.listEmployees({ limit: 200 }),
+    queryFn: () => employeesApi.listEmployees({ limit: 100 }),
   })
-  const employees = useMemo(() => data?.data ?? [], [data])
+
+  const { data: giftHistoryByEmployee } = useQuery({
+    queryKey: GIFT_HISTORY_QUERY_KEY,
+    queryFn: giftsApi.getGiftHistoryByEmployee,
+  })
+
+  const employees = useMemo(() => {
+    const rows = data?.data ?? []
+    if (!giftHistoryByEmployee) return rows
+    return rows.map((employee) => ({
+      ...employee,
+      giftHistory: (giftHistoryByEmployee[employee.id] ?? []).map(toGiftHistoryItem),
+    }))
+  }, [data, giftHistoryByEmployee])
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: EMPLOYEES_QUERY_KEY })
 
@@ -80,7 +113,11 @@ export const EmployeesProvider = ({ children }: { children: ReactNode }) => {
 
   const addEmployeesByTag: EmployeesContextValue['addEmployeesByTag'] = async (tags, opts) => {
     const result = await addByTagMutation.mutateAsync({ tags, ...opts })
-    return { resolvedCount: result.resolvedCount, unresolvedCount: result.unresolvedCount }
+    return {
+      resolvedCount: result.resolvedCount,
+      unresolvedCount: result.unresolvedCount,
+      duplicateCount: result.duplicateCount,
+    }
   }
 
   const bulkImportEmployees = async (rows: employeesApi.BulkImportRow[]) => {
@@ -121,10 +158,3 @@ export const useEmployees = () => {
   if (!ctx) throw new Error('useEmployees must be used within EmployeesProvider')
   return ctx
 }
-
-export const MOCK_DIRECTORY = [
-  { tag: '@adaeze', name: 'Adaeze Okonkwo', phone: '08031234567', email: 'adaeze.okonkwo@acme.com' },
-  { tag: '@chinedu_b', name: 'Chinedu Balogun', phone: '08022345678', email: 'chinedu.balogun@acme.com' },
-  { tag: '@tobifash', name: 'Tobi Fashola', phone: '08099887766', email: 'tobi.fashola@gmail.com' },
-  { tag: '@amaka.j', name: 'Amaka Johnson', phone: '08011223344', email: 'amaka.johnson@gmail.com' },
-]

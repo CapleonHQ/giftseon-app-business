@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
 
 export default function AuthLayout({
@@ -11,12 +11,22 @@ export default function AuthLayout({
 }) {
   const { status } = useAuth()
   const router = useRouter()
+  const pathname = usePathname()
+
+  // Right after OTP verification a user becomes "authenticated" but is still
+  // partway through the registration wizard's company-details/verification
+  // steps (3 and 4) — the wizard manages its own multi-step completion and
+  // only navigates to /dashboard explicitly once it's actually done (see
+  // handleEnterDashboard in register/page.tsx). Never force-redirect away
+  // from /register on account of auth status alone, or a user could get
+  // bounced out mid-wizard with a session but no company/verification yet.
+  const isOnRegisterPage = pathname === '/register'
 
   useEffect(() => {
-    if (status === 'authenticated') {
+    if (status === 'authenticated' && !isOnRegisterPage) {
       router.replace('/dashboard')
     }
-  }, [status, router])
+  }, [status, isOnRegisterPage, router])
 
   if (status === 'checking') {
     return (
@@ -26,7 +36,7 @@ export default function AuthLayout({
     )
   }
 
-  if (status === 'authenticated') {
+  if (status === 'authenticated' && !isOnRegisterPage) {
     return null
   }
 

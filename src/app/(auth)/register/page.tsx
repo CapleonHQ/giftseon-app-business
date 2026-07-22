@@ -25,7 +25,7 @@ type VerificationChoice = 'cac' | 'bvn_nin'
 export default function RegisterPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { registerAccount, verifyOtp, resendVerification, setCompany } = useAuth()
+  const { registerAccount, verifyOtp, resendVerification, setCompany, status, company, user } = useAuth()
   const [step, setStep] = useState(searchParams.get('step') === 'otp' ? 2 : 1)
   const [isLoading, setIsLoading] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -58,6 +58,27 @@ export default function RegisterPage() {
   useEffect(() => {
     if (searchParams.get('step') === 'otp') setStep(2)
   }, [searchParams])
+
+  // Once OTP verification succeeds (or on a page refresh mid-wizard), the
+  // user already has an authenticated session but no Company row yet —
+  // resume at the company-details step rather than resetting to step 1
+  // (which would fail outright since the account already exists).
+  useEffect(() => {
+    if (status === 'authenticated' && !company) {
+      setStep((s) => (s < 3 ? 3 : s))
+    }
+  }, [status, company])
+
+  // When resuming mid-wizard on a fresh page load, step 1's fields were
+  // never filled in on this mount — pre-fill the admin's real name/email
+  // from the already-authenticated session so step 3's submission doesn't
+  // send empty strings for them.
+  useEffect(() => {
+    if (!user) return
+    setAdminFirstName((v) => v || user.firstName)
+    setAdminLastName((v) => v || user.lastName)
+    setEmail((v) => v || user.email)
+  }, [user])
 
   const maskedEmail = useMemo(() => {
     if (!email) return ''
@@ -150,11 +171,20 @@ export default function RegisterPage() {
     }
   }, [otpCode, email, verifyOtp])
 
+  const [isResending, setIsResending] = useState(false)
+  const [resendMessage, setResendMessage] = useState('')
+
   const handleResendOtp = useCallback(async () => {
+    setFormError('')
+    setResendMessage('')
+    setIsResending(true)
     try {
       await resendVerification(email)
-    } catch {
-      // best-effort — the OTP screen has no dedicated slot for this failure
+      setResendMessage('A new code has been sent to your email.')
+    } catch (err) {
+      setFormError((err as ApiError).message || 'Could not resend the code. Please try again.')
+    } finally {
+      setIsResending(false)
     }
   }, [email, resendVerification])
 
@@ -384,10 +414,18 @@ export default function RegisterPage() {
                 </button>
                 <p className='text-center text-sm text-grey-500'>
                   Didn&apos;t get the OTP?{' '}
-                  <button type='button' onClick={handleResendOtp} className='font-medium text-primary-500 hover:text-primary-600 underline'>
-                    Resend OTP
+                  <button
+                    type='button'
+                    onClick={handleResendOtp}
+                    disabled={isResending}
+                    className='font-medium text-primary-500 hover:text-primary-600 underline disabled:opacity-60'
+                  >
+                    {isResending ? 'Resending...' : 'Resend OTP'}
                   </button>
                 </p>
+                {resendMessage && (
+                  <p className='text-center text-sm text-success-500'>{resendMessage}</p>
+                )}
               </div>
             )}
 

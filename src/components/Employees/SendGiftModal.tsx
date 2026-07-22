@@ -5,15 +5,15 @@ import { useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, ArrowRight, Sparkles, Users, Building2, X } from 'lucide-react'
 import SuccessModal from '@/components/Profile/SuccessModal'
 import ProductPicker from '@/components/Marketplace/ProductPicker'
-import { useEmployees } from '@/context/EmployeesContext'
+import { useEmployees, GIFT_HISTORY_QUERY_KEY } from '@/context/EmployeesContext'
 import { useGifting } from '@/context/GiftingContext'
 import { useBranding } from '@/context/BrandingContext'
 import { useAuth } from '@/context/AuthContext'
 import { DEPARTMENTS } from '@/lib/departments'
-import { MARKETPLACE_PRODUCTS } from '@/lib/mockMarketplace'
 import { GIFT_FORMATS, type GiftFormat } from '@/types/Gifting'
 import type { MarketplaceProduct } from '@/types/Marketplace'
 import * as giftsApi from '@/lib/api/gifts'
+import { getMarketplaceListing } from '@/lib/api/marketplace'
 import { FORMAT_TO_BACKEND } from '@/lib/api/giftingRules'
 import type { ApiError } from '@/lib/api/client'
 
@@ -69,7 +69,10 @@ export default function SendGiftModal({ open, onClose, initialEmployeeIds, initi
     setRuleId(enabledRules[0]?.id ?? '')
     setCustomFormat('')
     setCustomBudget('')
-    setProduct(initialProductId ? MARKETPLACE_PRODUCTS.find((p) => p.id === initialProductId) ?? null : null)
+    setProduct(null)
+    if (initialProductId) {
+      getMarketplaceListing(initialProductId).then(setProduct).catch(() => setProduct(null))
+    }
     setOccasionLabel('Just Because')
     setMessage(branding.messageTemplate)
     setError('')
@@ -161,6 +164,7 @@ export default function SendGiftModal({ open, onClose, initialEmployeeIds, initi
     }
     setIsSending(false)
     queryClient.invalidateQueries({ queryKey: ['wallet'] })
+    queryClient.invalidateQueries({ queryKey: GIFT_HISTORY_QUERY_KEY })
 
     if (failures.length === recipients.length) {
       setError(failures[0] ?? 'Could not send this gift. Please try again.')

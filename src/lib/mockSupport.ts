@@ -1,8 +1,4 @@
-import type { Ticket, ChatMessage, FaqCategory } from '@/types/Support'
-
-export const INITIAL_TICKETS: Ticket[] = [
-  { id: 'TCK-3104', subject: 'Auto-allocate suggestion looked too low for Sales', description: 'The per-gift amount suggested for Work Anniversary seemed low given our headcount.', priority: 'Medium', status: 'In Progress', createdAt: 'Jul 9, 2026' },
-]
+import type { ChatMessage, FaqCategory } from '@/types/Support'
 
 export const INITIAL_MESSAGES: ChatMessage[] = [
   { id: 1, from: 'bot', text: "Hi! I'm the Giftseon Business assistant. Ask me about employees, gifting configuration, budget, or branding." },
