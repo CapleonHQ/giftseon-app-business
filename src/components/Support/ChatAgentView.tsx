@@ -7,6 +7,7 @@ import SuccessModal from '@/components/Profile/SuccessModal'
 import type { TicketStatus } from '@/types/Support'
 import * as supportApi from '@/lib/api/support'
 import type { ApiError } from '@/lib/api/client'
+import { useAuth } from '@/context/AuthContext'
 
 const STATUS_STYLES: Record<TicketStatus, string> = {
   Open: 'bg-warning-50 text-warning-500',
@@ -16,8 +17,25 @@ const STATUS_STYLES: Record<TicketStatus, string> = {
 
 const TICKETS_QUERY_KEY = ['support-tickets'] as const
 
+const FORMSPREE_ENDPOINT = 'https://formspree.io/f/xaqrvqkb'
+
+/** Best-effort — the ticket is already persisted via the backend; this just
+ * makes sure a human sees it show up as an email too. Never blocks the UI. */
+const notifyFormspree = async (fields: Record<string, string>) => {
+  try {
+    await fetch(FORMSPREE_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(fields),
+    })
+  } catch {
+    // swallow — the real ticket record already exists via the backend
+  }
+}
+
 export default function ChatAgentView({ onBack }: { onBack: () => void }) {
   const queryClient = useQueryClient()
+  const { user, company } = useAuth()
   const { data: tickets = [], isLoading } = useQuery({
     queryKey: TICKETS_QUERY_KEY,
     queryFn: supportApi.listTickets,
@@ -27,27 +45,39 @@ export default function ChatAgentView({ onBack }: { onBack: () => void }) {
   const [description, setDescription] = useState('')
   const [priority, setPriority] = useState<'Low' | 'Medium' | 'High'>('Medium')
   const [error, setError] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
 
-  const createMutation = useMutation({
-    mutationFn: supportApi.createTicket,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: TICKETS_QUERY_KEY })
-      setSubject('')
-      setDescription('')
-      setPriority('Medium')
-      setShowSuccess(true)
-    },
-    onError: (err) => setError((err as unknown as ApiError).message || 'Could not create ticket. Please try again.'),
-  })
+  const createMutation = useMutation({ mutationFn: supportApi.createTicket })
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!subject.trim() || !description.trim()) {
       setError('Fill in both the subject and description.')
       return
     }
     setError('')
-    createMutation.mutate({ subject, description, priority })
+    setIsSubmitting(true)
+    try {
+      await createMutation.mutateAsync({ subject, description, priority })
+      notifyFormspree({
+        _subject: `[Business Support] ${subject}`,
+        email: user?.email ?? '',
+        name: user ? `${user.firstName} ${user.lastName}` : '',
+        company: company?.companyName ?? '',
+        subject,
+        priority,
+        message: description,
+      })
+      queryClient.invalidateQueries({ queryKey: TICKETS_QUERY_KEY })
+      setSubject('')
+      setDescription('')
+      setPriority('Medium')
+      setShowSuccess(true)
+    } catch (err) {
+      setError((err as ApiError).message || 'Could not create ticket. Please try again.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -81,11 +111,11 @@ export default function ChatAgentView({ onBack }: { onBack: () => void }) {
             {error && <p className='text-sm text-error-500'>{error}</p>}
             <button
               onClick={handleSubmit}
-              disabled={createMutation.isPending}
+              disabled={isSubmitting}
               className='w-full rounded-lg py-2.5 text-sm font-medium text-white transition-all disabled:opacity-60'
               style={{ background: 'linear-gradient(to bottom, var(--primary-400) 17.5%, var(--primary-600))' }}
             >
-              {createMutation.isPending ? 'Submitting...' : 'Submit ticket'}
+              {isSubmitting ? 'Submitting...' : 'Submit ticket'}
             </button>
           </div>
         </div>

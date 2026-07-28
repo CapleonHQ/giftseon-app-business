@@ -368,7 +368,7 @@ export default function RegisterPage() {
                   </div>
                 </FormField>
 
-                <FormField label='Admin Email Address' error={errors.email}>
+                <FormField label='Work email address' error={errors.email}>
                   <input
                     type='email'
                     value={email}
