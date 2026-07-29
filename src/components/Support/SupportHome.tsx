@@ -19,6 +19,7 @@ const SUPPORT_OPTIONS = [
     key: 'ai-chatbot',
     title: 'AI Chatbot',
     description: 'Ask questions about your account and get quick answers, powered by smart assistance.',
+    disabled: true,
     icon: (
       <svg width='24' height='24' viewBox='0 0 24 24' fill='none'>
         <path d='M12 3C7.03 3 3 6.58 3 11C3 13.12 4.04 15.03 5.67 16.39L4.5 20.5L9.12 18.76C10.04 18.92 11.01 19 12 19C16.97 19 21 15.42 21 11C21 6.58 16.97 3 12 3Z' stroke='var(--primary-500)' strokeWidth='1.5' strokeLinecap='round' strokeLinejoin='round' />
@@ -47,11 +48,23 @@ export default function SupportHome({ onNavigate }: SupportHomeProps) {
       {SUPPORT_OPTIONS.map((option) => (
         <button
           key={option.key}
-          onClick={() => onNavigate(option.key)}
-          className='flex flex-col items-start rounded-xl border border-grey-100 bg-white p-5 text-left transition-all hover:border-primary-200 hover:shadow-sm'
+          onClick={() => !option.disabled && onNavigate(option.key)}
+          disabled={option.disabled}
+          className={`flex flex-col items-start rounded-xl border border-grey-100 bg-white p-5 text-left transition-all ${
+            option.disabled
+              ? 'cursor-not-allowed opacity-60'
+              : 'hover:border-primary-200 hover:shadow-sm'
+          }`}
         >
-          <div className='mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-primary-50'>
-            {option.icon}
+          <div className='mb-3 flex w-full items-center justify-between'>
+            <div className='flex h-10 w-10 items-center justify-center rounded-lg bg-primary-50'>
+              {option.icon}
+            </div>
+            {option.disabled && (
+              <span className='rounded-full bg-grey-100 px-2 py-0.5 text-[11px] font-medium text-grey-500'>
+                Coming soon
+              </span>
+            )}
           </div>
           <h3 className='text-sm font-semibold text-blackish'>{option.title}</h3>
           <p className='mt-1 text-xs text-grey-400 leading-relaxed'>{option.description}</p>
