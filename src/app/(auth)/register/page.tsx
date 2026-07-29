@@ -278,14 +278,14 @@ export default function RegisterPage() {
   const current = stepConfig[step as keyof typeof stepConfig]
 
   return (
-    <div className='flex min-h-screen flex-col bg-white'>
+    <div className='flex min-h-screen flex-col bg-white lg:h-screen lg:overflow-hidden'>
       <header className='flex items-center justify-between px-6 py-5 lg:px-12'>
         <GiftseonLogo className='h-8 w-auto' />
         <BackToHomeLink />
       </header>
 
-      <div className='flex flex-1 flex-col lg:flex-row'>
-        {/* Left panel — context */}
+      <div className='flex flex-1 flex-col lg:flex-row lg:min-h-0'>
+        {/* Left panel — context, static on large screens */}
         <div className='flex flex-col justify-center px-6 py-8 lg:w-[45%] lg:px-12 lg:py-16'>
           <div className='mx-auto max-w-md lg:mx-0'>
             {current.illustration}
@@ -301,9 +301,9 @@ export default function RegisterPage() {
           </div>
         </div>
 
-        {/* Right panel — form */}
-        <div className='flex flex-1 items-start justify-center px-6 py-8 lg:items-center lg:px-12'>
-          <div className='w-full max-w-md'>
+        {/* Right panel — form, scrolls independently of the left panel on large screens */}
+        <div className='flex flex-1 justify-center overflow-y-auto px-6 py-8 lg:min-h-0 lg:px-12'>
+          <div className='flex w-full max-w-md flex-col justify-center py-2 lg:py-8'>
             {formError && (
               <div className='mb-5 flex items-start gap-2 rounded-lg border border-error-200 bg-error-50 px-3.5 py-2.5 text-sm text-error-600'>
                 <AlertCircle className='h-4 w-4 mt-0.5 shrink-0' />
