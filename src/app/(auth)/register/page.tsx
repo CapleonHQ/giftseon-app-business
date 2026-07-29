@@ -91,10 +91,10 @@ export default function RegisterPage() {
 
   const validateStep1 = () => {
     const next: Record<string, string> = {}
-    if (!adminFirstName) next.adminFirstName = 'Admin first name is required'
-    if (!adminLastName) next.adminLastName = 'Admin last name is required'
+    if (!adminFirstName) next.adminFirstName = 'First name is required'
+    if (!adminLastName) next.adminLastName = 'Last name is required'
     if (!gender) next.gender = 'Select a gender'
-    if (!email) next.email = 'Admin email is required'
+    if (!email) next.email = 'Email address is required'
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) next.email = 'Enter a valid email address'
     if (!isPasswordValid) next.password = 'Password does not meet the criteria'
     setErrors(next)
@@ -243,8 +243,8 @@ export default function RegisterPage() {
   const stepConfig = {
     1: {
       illustration: <BusinessInfoIllustration className='h-44 w-auto' />,
-      title: 'Create Your Admin Account',
-      subtitle: 'Tell us who will be administering gifting for your company.',
+      title: 'Create Your Account',
+      subtitle: 'Tell us who will be managing gifting for your company.',
     },
     2: {
       illustration: <EmailVerificationIllustration className='h-44 w-auto' />,
@@ -314,7 +314,7 @@ export default function RegisterPage() {
             {step === 1 && (
               <form onSubmit={(e) => { e.preventDefault(); handleStep1Submit() }} className='space-y-5'>
                 <div className='grid grid-cols-2 gap-4'>
-                  <FormField label='Admin First Name' error={errors.adminFirstName}>
+                  <FormField label='First Name' error={errors.adminFirstName}>
                     <input
                       type='text'
                       value={adminFirstName}
@@ -323,7 +323,7 @@ export default function RegisterPage() {
                       className={`form-input ${errors.adminFirstName ? 'border-error-400' : ''}`}
                     />
                   </FormField>
-                  <FormField label='Admin Last Name' error={errors.adminLastName}>
+                  <FormField label='Last Name' error={errors.adminLastName}>
                     <input
                       type='text'
                       value={adminLastName}

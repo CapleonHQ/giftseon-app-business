@@ -69,10 +69,10 @@ export default function CompanyInfoTab() {
     { label: 'Company Name', key: 'companyName' },
     { label: 'Business Type', key: 'businessType' },
     { label: 'Industry', key: 'industry' },
-    { label: 'Admin First Name', key: 'adminFirstName' },
-    { label: 'Admin Last Name', key: 'adminLastName' },
-    { label: 'Admin Email Address', key: 'email' },
-    { label: 'Admin Phone Number', key: 'phone' },
+    { label: 'First Name', key: 'adminFirstName' },
+    { label: 'Last Name', key: 'adminLastName' },
+    { label: 'Email Address', key: 'email' },
+    { label: 'Phone Number', key: 'phone' },
   ]
 
   const status = company?.verificationStatus ?? 'not_started'

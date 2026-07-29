@@ -20,7 +20,7 @@ export default function DashboardHeader({ title = 'Dashboard' }: { title?: strin
   }, [])
 
   const companyName = company?.companyName || 'Company'
-  const adminFirstName = company?.adminFirstName || 'Admin'
+  const adminFirstName = company?.adminFirstName || 'there'
 
   return (
     <header className='flex items-center justify-between border-b border-grey-100 bg-white px-6 py-4 lg:px-8'>
