@@ -23,6 +23,11 @@ type EditableFields = {
 
 const VERIFICATION_STATUS_CONFIG = {
   not_started: { label: 'Not Started', badge: 'bg-grey-100 text-grey-500', icon: FileWarning },
+  // Documents/details submitted, but Anchor's own automated pipeline hasn't
+  // registered progress yet — distinct from "pending" (which means Anchor's
+  // side has confirmed receipt) so a stalled provider-side step never reads
+  // as "nothing happened".
+  submitted: { label: 'Submitted — Confirming', badge: 'bg-warning-50 text-warning-500', icon: Clock },
   pending: { label: 'Under Review', badge: 'bg-warning-50 text-warning-500', icon: Clock },
   awaiting_document: { label: 'Action Required', badge: 'bg-warning-50 text-warning-500', icon: ShieldAlert },
   approved: { label: 'Verified', badge: 'bg-success-50 text-success-500', icon: ShieldCheck },
@@ -75,10 +80,16 @@ export default function CompanyInfoTab() {
     { label: 'Phone Number', key: 'phone' },
   ]
 
-  const status = company?.verificationStatus ?? 'not_started'
+  const anchorStatus = company?.verificationStatus ?? 'not_started'
+  // Anchor's own pipeline (anchorStatus) is the source of truth once it has
+  // moved at all — but if it's stuck at not_started while we've already
+  // recorded a submission (kycStatus), surface that as "submitted" instead
+  // of silently looking identical to never having started.
+  const status = anchorStatus === 'not_started' && company?.kycStatus === 'pending' ? 'submitted' : anchorStatus
   const statusConfig = VERIFICATION_STATUS_CONFIG[status]
   const StatusIcon = statusConfig.icon
   const canStartVerification = status === 'not_started' || status === 'rejected'
+  const canRetryVerification = status === 'submitted'
 
   const handleVerificationSubmitted = async () => {
     setIsSubmittingVerification(false)
@@ -192,13 +203,13 @@ export default function CompanyInfoTab() {
               <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${statusConfig.badge}`}>
                 {statusConfig.label}
               </span>
-              {canStartVerification && (
+              {(canStartVerification || canRetryVerification) && (
                 <button
                   onClick={() => setShowVerificationModal(true)}
                   className='rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-all'
                   style={{ background: 'linear-gradient(to bottom, var(--primary-400) 17.5%, var(--primary-600))' }}
                 >
-                  {status === 'rejected' ? 'Resubmit' : 'Complete Verification'}
+                  {status === 'rejected' || status === 'submitted' ? 'Retry Verification' : 'Complete Verification'}
                 </button>
               )}
             </div>
@@ -206,6 +217,12 @@ export default function CompanyInfoTab() {
           {status === 'awaiting_document' && (
             <p className='mt-2 text-xs text-warning-500'>
               We need additional documents to complete your verification — check your email for details.
+            </p>
+          )}
+          {status === 'submitted' && (
+            <p className='mt-2 text-xs text-warning-500'>
+              We received your details but haven&apos;t been able to confirm them with our verification
+              provider yet — this can take a little longer than usual. You can retry if it&apos;s been a while.
             </p>
           )}
         </div>
@@ -229,7 +246,9 @@ export default function CompanyInfoTab() {
               </svg>
             </button>
 
-            <h3 className='text-lg font-semibold text-blackish'>Complete Verification</h3>
+            <h3 className='text-lg font-semibold text-blackish'>
+              {canRetryVerification || status === 'rejected' ? 'Retry Verification' : 'Complete Verification'}
+            </h3>
             <p className='mt-1 text-sm text-grey-400'>
               Verify your business with your CAC document, or confirm your identity with your BVN.
             </p>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import DashboardHeader from '@/components/Dashboard/DashboardHeader'
 import ProfileBanner from '@/components/Settings/ProfileBanner'
 import CompanyInfoTab from '@/components/Settings/CompanyInfoTab'
@@ -12,8 +12,16 @@ const TABS = ['Company Information', 'Notifications', 'Security'] as const
 type Tab = (typeof TABS)[number]
 
 export default function SettingsContent() {
-  const { company, updateCompany } = useAuth()
+  const { company, updateCompany, refreshCompany } = useAuth()
   const [activeTab, setActiveTab] = useState<Tab>('Company Information')
+
+  // Client-side navigation doesn't remount AuthProvider, so without this the
+  // page can show whatever was in memory from before a verification
+  // submission elsewhere in the app — refetch whenever Settings is opened.
+  useEffect(() => {
+    refreshCompany()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <div className='flex flex-col'>

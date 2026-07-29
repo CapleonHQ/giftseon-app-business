@@ -148,6 +148,11 @@ export const toCompanyProfile = (company: BackendCompany, user: AuthUser): Compa
   isVerified: company.anchorKybStatus === 'approved',
   verificationMethod: company.anchorCustomerType === 'individual' ? 'bvn_nin' : company.anchorCustomerType === 'business' ? 'cac' : undefined,
   verificationStatus: company.anchorKybStatus,
+  // kycStatus flips to 'pending' the moment documents/details are submitted,
+  // independent of whether Anchor's own automated pipeline (anchorKybStatus)
+  // has progressed — needed so the UI can tell "you already submitted, still
+  // being confirmed" apart from "you haven't started".
+  kycStatus: company.kycStatus,
   walletId: user.id,
   createdAt: company.createdAt,
   updatedAt: company.updatedAt,

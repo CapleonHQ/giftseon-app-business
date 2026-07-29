@@ -15,6 +15,10 @@ export interface CompanyProfile {
   isVerified: boolean
   verificationMethod?: 'cac' | 'bvn_nin'
   verificationStatus?: 'not_started' | 'pending' | 'awaiting_document' | 'approved' | 'rejected'
+  /** Flips to 'pending' the moment documents/details are submitted — distinct
+   * from verificationStatus (Anchor's own automated pipeline state), which
+   * can lag behind or never progress if Anchor's side has an issue. */
+  kycStatus?: 'pending' | 'verified' | 'rejected'
   walletId: string
   createdAt: string
   updatedAt: string
