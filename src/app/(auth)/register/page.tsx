@@ -2,8 +2,7 @@
 
 import { useState, useCallback, useMemo, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useDropzone } from 'react-dropzone'
-import { ChevronDown, UploadCloud, FileCheck2, X, AlertCircle } from 'lucide-react'
+import { ChevronDown, UploadCloud, AlertCircle } from 'lucide-react'
 import GiftseonLogo from '@/components/Auth/GiftseonLogo'
 import BackToHomeLink from '@/components/Auth/BackToHomeLink'
 import StepIndicator from '@/components/Auth/StepIndicator'
@@ -12,6 +11,10 @@ import PasswordInput, { PASSWORD_RULES } from '@/components/Auth/PasswordInput'
 import BusinessInfoIllustration from '@/components/Auth/illustrations/BusinessInfoIllustration'
 import EmailVerificationIllustration from '@/components/Auth/illustrations/EmailVerificationIllustration'
 import SuccessScreen from '@/components/Auth/SuccessScreen'
+import BusinessVerificationForm, {
+  type BusinessVerificationSubmission,
+  type IndividualVerificationSubmission,
+} from '@/components/Auth/BusinessVerificationForm'
 import { useAuth } from '@/context/AuthContext'
 import * as companyApi from '@/lib/api/company'
 import type { ApiError } from '@/lib/api/client'
@@ -19,8 +22,6 @@ import type { ApiError } from '@/lib/api/client'
 const BUSINESS_TYPES = ['Startup', 'SME', 'Enterprise', 'NGO / Non-profit']
 const INDUSTRIES = ['Technology', 'Finance', 'Retail', 'Manufacturing', 'Healthcare', 'Education', 'Logistics', 'Other']
 const GENDERS = ['Male', 'Female', 'Other']
-
-type VerificationChoice = 'cac' | 'bvn_nin'
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -47,13 +48,6 @@ export default function RegisterPage() {
   const [industry, setIndustry] = useState('')
   const [website, setWebsite] = useState('')
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
-
-  // Step 4 — Business verification
-  const [verificationChoice, setVerificationChoice] = useState<VerificationChoice>('cac')
-  const [cacFile, setCacFile] = useState<File | null>(null)
-  const [cacFilePreview, setCacFilePreview] = useState<string | null>(null)
-  const [bvn, setBvn] = useState('')
-  const [nin, setNin] = useState('')
 
   useEffect(() => {
     if (searchParams.get('step') === 'otp') setStep(2)
@@ -88,17 +82,6 @@ export default function RegisterPage() {
     return `${visible}${'*'.repeat(Math.max(local.length - 1, 3))}@${domain}`
   }, [email])
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    accept: { 'application/pdf': ['.pdf'], 'image/*': ['.png', '.jpg', '.jpeg'] },
-    maxFiles: 1,
-    onDrop: (accepted) => {
-      if (accepted[0]) {
-        setCacFile(accepted[0])
-        setCacFilePreview(URL.createObjectURL(accepted[0]))
-      }
-    },
-  })
-
   const handleLogoSelect = (file: File) => {
     setLogoPreview(URL.createObjectURL(file))
   }
@@ -125,19 +108,6 @@ export default function RegisterPage() {
     if (!companyName) next.companyName = 'Company name is required'
     if (!businessType) next.businessType = 'Select a business type'
     if (!industry) next.industry = 'Select an industry'
-    setErrors(next)
-    return Object.keys(next).length === 0
-  }
-
-  const validateStep4 = () => {
-    const next: Record<string, string> = {}
-    if (verificationChoice === 'cac' && !cacFile) {
-      next.cacFile = 'Upload your CAC certificate to continue'
-    }
-    if (verificationChoice === 'bvn_nin') {
-      if (!bvn || bvn.length !== 11) next.bvn = 'Enter a valid 11-digit BVN'
-      if (!nin || nin.length !== 11) next.nin = 'Enter a valid 11-digit NIN'
-    }
     setErrors(next)
     return Object.keys(next).length === 0
   }
@@ -215,36 +185,46 @@ export default function RegisterPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyName, businessType, industry, website, logoPreview])
 
-  const handleStep4Submit = useCallback(async () => {
-    if (!validateStep4()) return
+  const handleVerificationSuccess = useCallback((backendCompany: companyApi.BackendCompany) => {
+    setCompany(companyApi.toCompanyProfile(backendCompany, {
+      id: backendCompany.userId,
+      firstName: adminFirstName,
+      lastName: adminLastName,
+      email,
+    }))
+    setStep(5)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adminFirstName, adminLastName, email])
+
+  const handleSubmitBusinessKyc = useCallback(async (payload: BusinessVerificationSubmission) => {
     setFormError('')
     setIsLoading(true)
     try {
-      // No document-upload service exists yet in business-service — CAC
-      // uploads are passed as their local blob URL (valid URI, but only
-      // resolvable in this browser session), and BVN/NIN has no dedicated
-      // backend field yet, so it's encoded as a urn: pseudo-document.
-      // Known gap: real file storage + BVN/NIN verification are out of scope
-      // for Phase 1.
-      const documents =
-        verificationChoice === 'cac' && cacFilePreview
-          ? [cacFilePreview]
-          : [`urn:bvn-nin:${bvn}:${nin}`]
-      const backendCompany = await companyApi.submitCompanyKyc(documents)
-      setCompany(companyApi.toCompanyProfile(backendCompany, {
-        id: backendCompany.userId,
-        firstName: adminFirstName,
-        lastName: adminLastName,
-        email,
-      }))
-      setStep(5)
+      const { registrationNumber, address, industry, ...kycPayload } = payload
+      await companyApi.updateCompanyProfile({ registrationNumber, address, industry })
+      const backendCompany = await companyApi.submitCompanyKyc(kycPayload)
+      handleVerificationSuccess(backendCompany)
     } catch (err) {
-      setFormError((err as ApiError).message || 'Could not submit verification documents. Please try again.')
+      setFormError((err as ApiError).message || 'Could not submit verification details. Please try again.')
     } finally {
       setIsLoading(false)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [verificationChoice, cacFilePreview, bvn, nin])
+  }, [handleVerificationSuccess])
+
+  const handleSubmitIndividualKyc = useCallback(async (payload: IndividualVerificationSubmission) => {
+    setFormError('')
+    setIsLoading(true)
+    try {
+      const { address, ...kycPayload } = payload
+      await companyApi.updateCompanyProfile({ address })
+      const backendCompany = await companyApi.submitIndividualKyc(kycPayload)
+      handleVerificationSuccess(backendCompany)
+    } catch (err) {
+      setFormError((err as ApiError).message || 'Could not submit verification details. Please try again.')
+    } finally {
+      setIsLoading(false)
+    }
+  }, [handleVerificationSuccess])
 
   const handleEnterDashboard = useCallback(() => {
     router.push('/dashboard')
@@ -512,98 +492,12 @@ export default function RegisterPage() {
             )}
 
             {step === 4 && (
-              <form onSubmit={(e) => { e.preventDefault(); handleStep4Submit() }} className='space-y-5'>
-                <div className='grid grid-cols-2 gap-4'>
-                  <button
-                    type='button'
-                    onClick={() => setVerificationChoice('cac')}
-                    className={`rounded-xl border-2 p-4 text-left transition-colors ${
-                      verificationChoice === 'cac' ? 'border-primary-400 bg-primary-50/30' : 'border-grey-100 hover:border-grey-200'
-                    }`}
-                  >
-                    <p className='text-sm font-semibold text-blackish'>CAC Document</p>
-                    <p className='mt-1 text-xs text-grey-500'>Upload your Corporate Affairs Commission certificate.</p>
-                  </button>
-                  <button
-                    type='button'
-                    onClick={() => setVerificationChoice('bvn_nin')}
-                    className={`rounded-xl border-2 p-4 text-left transition-colors ${
-                      verificationChoice === 'bvn_nin' ? 'border-primary-400 bg-primary-50/30' : 'border-grey-100 hover:border-grey-200'
-                    }`}
-                  >
-                    <p className='text-sm font-semibold text-blackish'>BVN / NIN</p>
-                    <p className='mt-1 text-xs text-grey-500'>Confirm the admin&apos;s identity instead.</p>
-                  </button>
-                </div>
-
-                {verificationChoice === 'cac' && (
-                  <div>
-                    <label className='mb-1.5 block text-sm font-medium text-blackish'>CAC Certificate</label>
-                    {cacFile ? (
-                      <div className='flex items-center justify-between rounded-lg border border-grey-200 bg-grey-50/50 px-4 py-3'>
-                        <div className='flex items-center gap-2 text-sm text-blackish'>
-                          <FileCheck2 className='h-4 w-4 text-success-500' />
-                          {cacFile.name}
-                        </div>
-                        <button type='button' onClick={() => { setCacFile(null); setCacFilePreview(null) }} className='text-grey-400 hover:text-error-500'>
-                          <X className='h-4 w-4' />
-                        </button>
-                      </div>
-                    ) : (
-                      <div
-                        {...getRootProps()}
-                        className={`flex flex-col items-center rounded-lg border-2 border-dashed py-8 cursor-pointer transition-colors ${
-                          isDragActive ? 'border-primary-400 bg-primary-50/30' : 'border-grey-200 hover:border-primary-300'
-                        }`}
-                      >
-                        <input {...getInputProps()} />
-                        <UploadCloud className='mb-2 h-6 w-6 text-primary-400' />
-                        <p className='text-sm text-grey-600'>
-                          <span className='font-medium text-primary-500'>Click to upload</span> or drag and drop
-                        </p>
-                        <p className='mt-1 text-xs text-grey-400'>PDF, PNG or JPG (max. 5MB)</p>
-                      </div>
-                    )}
-                    {errors.cacFile && <p className='mt-1.5 text-xs text-error-500'>{errors.cacFile}</p>}
-                  </div>
-                )}
-
-                {verificationChoice === 'bvn_nin' && (
-                  <div className='space-y-5'>
-                    <FormField label='BVN (Bank Verification Number)' error={errors.bvn}>
-                      <input
-                        type='text'
-                        inputMode='numeric'
-                        maxLength={11}
-                        value={bvn}
-                        onChange={(e) => setBvn(e.target.value.replace(/\D/g, ''))}
-                        placeholder='Enter your 11-digit BVN'
-                        className={`form-input ${errors.bvn ? 'border-error-400' : ''}`}
-                      />
-                    </FormField>
-                    <FormField label='NIN (National Identification Number)' error={errors.nin}>
-                      <input
-                        type='text'
-                        inputMode='numeric'
-                        maxLength={11}
-                        value={nin}
-                        onChange={(e) => setNin(e.target.value.replace(/\D/g, ''))}
-                        placeholder='Enter your 11-digit NIN'
-                        className={`form-input ${errors.nin ? 'border-error-400' : ''}`}
-                      />
-                    </FormField>
-                  </div>
-                )}
-
-                <div className='grid grid-cols-2 gap-4'>
-                  <button type='button' onClick={() => setStep(3)} className='flex items-center justify-center gap-2 rounded-xl border border-grey-200 py-3 text-sm font-medium text-grey-600 hover:bg-grey-50 transition-colors'>
-                    Go Back
-                  </button>
-                  <button type='submit' disabled={isLoading} className='auth-btn-primary'>
-                    {isLoading ? 'Submitting...' : 'Submit for Review'}
-                  </button>
-                </div>
-              </form>
+              <BusinessVerificationForm
+                onSubmitBusiness={handleSubmitBusinessKyc}
+                onSubmitIndividual={handleSubmitIndividualKyc}
+                isLoading={isLoading}
+                onBack={() => setStep(3)}
+              />
             )}
           </div>
         </div>

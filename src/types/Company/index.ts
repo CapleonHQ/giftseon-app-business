@@ -14,6 +14,7 @@ export interface CompanyProfile {
   brandColor?: string
   isVerified: boolean
   verificationMethod?: 'cac' | 'bvn_nin'
+  verificationStatus?: 'not_started' | 'pending' | 'awaiting_document' | 'approved' | 'rejected'
   walletId: string
   createdAt: string
   updatedAt: string

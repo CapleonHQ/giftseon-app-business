@@ -1,9 +1,15 @@
 'use client'
 
 import { useState } from 'react'
-import { Pencil } from 'lucide-react'
+import { Pencil, ShieldCheck, ShieldAlert, Clock, FileWarning } from 'lucide-react'
 import SuccessModal from '@/components/Profile/SuccessModal'
+import BusinessVerificationForm, {
+  type BusinessVerificationSubmission,
+  type IndividualVerificationSubmission,
+} from '@/components/Auth/BusinessVerificationForm'
 import { useAuth } from '@/context/AuthContext'
+import * as companyApi from '@/lib/api/company'
+import type { ApiError } from '@/lib/api/client'
 
 type EditableFields = {
   companyName: string
@@ -15,10 +21,21 @@ type EditableFields = {
   phone: string
 }
 
+const VERIFICATION_STATUS_CONFIG = {
+  not_started: { label: 'Not Started', badge: 'bg-grey-100 text-grey-500', icon: FileWarning },
+  pending: { label: 'Under Review', badge: 'bg-warning-50 text-warning-500', icon: Clock },
+  awaiting_document: { label: 'Action Required', badge: 'bg-warning-50 text-warning-500', icon: ShieldAlert },
+  approved: { label: 'Verified', badge: 'bg-success-50 text-success-500', icon: ShieldCheck },
+  rejected: { label: 'Rejected', badge: 'bg-error-50 text-error-500', icon: ShieldAlert },
+} as const
+
 export default function CompanyInfoTab() {
-  const { company, updateCompany } = useAuth()
+  const { company, updateCompany, refreshCompany } = useAuth()
   const [isEditing, setIsEditing] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
+  const [showVerificationModal, setShowVerificationModal] = useState(false)
+  const [isSubmittingVerification, setIsSubmittingVerification] = useState(false)
+  const [verificationError, setVerificationError] = useState('')
 
   const baseInfo: EditableFields = {
     companyName: company?.companyName || '',
@@ -57,6 +74,46 @@ export default function CompanyInfoTab() {
     { label: 'Admin Email Address', key: 'email' },
     { label: 'Admin Phone Number', key: 'phone' },
   ]
+
+  const status = company?.verificationStatus ?? 'not_started'
+  const statusConfig = VERIFICATION_STATUS_CONFIG[status]
+  const StatusIcon = statusConfig.icon
+  const canStartVerification = status === 'not_started' || status === 'rejected'
+
+  const handleVerificationSubmitted = async () => {
+    setIsSubmittingVerification(false)
+    setShowVerificationModal(false)
+    await refreshCompany()
+    setShowSuccess(true)
+  }
+
+  const handleSubmitBusinessKyc = async (payload: BusinessVerificationSubmission) => {
+    setVerificationError('')
+    setIsSubmittingVerification(true)
+    try {
+      const { registrationNumber, address, industry, ...kycPayload } = payload
+      await companyApi.updateCompanyProfile({ registrationNumber, address, industry })
+      await companyApi.submitCompanyKyc(kycPayload)
+      await handleVerificationSubmitted()
+    } catch (err) {
+      setVerificationError((err as ApiError).message || 'Could not submit verification details. Please try again.')
+      setIsSubmittingVerification(false)
+    }
+  }
+
+  const handleSubmitIndividualKyc = async (payload: IndividualVerificationSubmission) => {
+    setVerificationError('')
+    setIsSubmittingVerification(true)
+    try {
+      const { address, ...kycPayload } = payload
+      await companyApi.updateCompanyProfile({ address })
+      await companyApi.submitIndividualKyc(kycPayload)
+      await handleVerificationSubmitted()
+    } catch (err) {
+      setVerificationError((err as ApiError).message || 'Could not submit verification details. Please try again.')
+      setIsSubmittingVerification(false)
+    }
+  }
 
   return (
     <>
@@ -117,20 +174,40 @@ export default function CompanyInfoTab() {
 
         <div>
           <h3 className='text-base font-semibold text-blackish'>Verification</h3>
-          <p className='text-sm text-grey-400'>The document used to verify your company on Giftseon.</p>
+          <p className='text-sm text-grey-400'>
+            Verifying your business unlocks wallet funding by bank transfer.
+          </p>
           <div className='mt-3 flex items-center justify-between rounded-lg border border-grey-100 px-4 py-3'>
             <div className='flex items-center gap-2'>
-              <svg width='16' height='16' viewBox='0 0 16 16' fill='none'>
-                <path d='M9.33333 1.33334H4C3.64638 1.33334 3.30724 1.47381 3.05719 1.72386C2.80714 1.97391 2.66667 2.31305 2.66667 2.66668V13.3333C2.66667 13.687 2.80714 14.0261 3.05719 14.2762C3.30724 14.5262 3.64638 14.6667 4 14.6667H12C12.3536 14.6667 12.6928 14.5262 12.9428 14.2762C13.1929 14.0261 13.3333 13.687 13.3333 13.3333V5.33334L9.33333 1.33334Z' stroke='#87817f' strokeWidth='1.2' strokeLinecap='round' strokeLinejoin='round' />
-              </svg>
+              <StatusIcon className='h-4 w-4 text-grey-500' />
               <span className='text-sm text-blackish'>
-                {company?.verificationMethod === 'bvn_nin' ? 'BVN / NIN Confirmation' : 'CAC Certificate'}
+                {company?.verificationMethod === 'bvn_nin'
+                  ? 'BVN Confirmation (no CAC registration)'
+                  : company?.verificationMethod === 'cac'
+                    ? 'CAC-Registered Business'
+                    : 'Not yet started'}
               </span>
             </div>
-            <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${company?.isVerified ? 'bg-success-50 text-success-500' : 'bg-warning-50 text-warning-500'}`}>
-              {company?.isVerified ? 'Verified' : 'Under review'}
-            </span>
+            <div className='flex items-center gap-3'>
+              <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${statusConfig.badge}`}>
+                {statusConfig.label}
+              </span>
+              {canStartVerification && (
+                <button
+                  onClick={() => setShowVerificationModal(true)}
+                  className='rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-all'
+                  style={{ background: 'linear-gradient(to bottom, var(--primary-400) 17.5%, var(--primary-600))' }}
+                >
+                  {status === 'rejected' ? 'Resubmit' : 'Complete Verification'}
+                </button>
+              )}
+            </div>
           </div>
+          {status === 'awaiting_document' && (
+            <p className='mt-2 text-xs text-warning-500'>
+              We need additional documents to complete your verification — check your email for details.
+            </p>
+          )}
         </div>
       </div>
 
@@ -139,6 +216,35 @@ export default function CompanyInfoTab() {
         onClose={() => setShowSuccess(false)}
         message='Your company information has been successfully updated.'
       />
+
+      {showVerificationModal && (
+        <div className='fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 px-4 py-8'>
+          <div className='relative w-full max-w-xl rounded-xl bg-white p-6 shadow-xl sm:p-8'>
+            <button
+              onClick={() => setShowVerificationModal(false)}
+              className='absolute right-4 top-4 text-grey-400 hover:text-blackish'
+            >
+              <svg width='20' height='20' viewBox='0 0 20 20' fill='none'>
+                <path d='M15 5L5 15M5 5L15 15' stroke='currentColor' strokeWidth='1.5' strokeLinecap='round' />
+              </svg>
+            </button>
+
+            <h3 className='text-lg font-semibold text-blackish'>Complete Verification</h3>
+            <p className='mt-1 text-sm text-grey-400'>
+              Verify your business with your CAC document, or confirm your identity with your BVN.
+            </p>
+
+            <div className='mt-6'>
+              <BusinessVerificationForm
+                onSubmitBusiness={handleSubmitBusinessKyc}
+                onSubmitIndividual={handleSubmitIndividualKyc}
+                isLoading={isSubmittingVerification}
+                formError={verificationError}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }
