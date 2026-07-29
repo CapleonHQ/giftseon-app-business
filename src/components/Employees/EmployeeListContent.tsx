@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { Search, SlidersHorizontal, Eye, Gift, Trash2, ChevronLeft, ChevronRight, X, UserPlus } from 'lucide-react'
 import DashboardHeader from '@/components/Dashboard/DashboardHeader'
@@ -28,8 +29,10 @@ export default function EmployeeListContent() {
   const [filterDept, setFilterDept] = useState('All Departments')
   const [filterStatus, setFilterStatus] = useState('All Status')
   const [openMenu, setOpenMenu] = useState<string | null>(null)
+  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null)
   const [activeEmployee, setActiveEmployee] = useState<Employee | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
+  const MENU_WIDTH = 176 // w-44
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [sendGiftOpen, setSendGiftOpen] = useState(false)
@@ -44,6 +47,21 @@ export default function EmployeeListContent() {
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
+
+  // The menu is portaled and positioned from the trigger button's on-screen
+  // coordinates — close it on scroll/resize rather than tracking every
+  // scroll to reposition, since the table body itself also scrolls
+  // horizontally and could otherwise leave the menu misaligned.
+  useEffect(() => {
+    if (!openMenu) return
+    const close = () => { setOpenMenu(null); setMenuPosition(null) }
+    window.addEventListener('scroll', close, true)
+    window.addEventListener('resize', close)
+    return () => {
+      window.removeEventListener('scroll', close, true)
+      window.removeEventListener('resize', close)
+    }
+  }, [openMenu])
 
   const departments = useMemo(
     () => ['All Departments', ...Array.from(new Set(employees.map((e) => e.department)))],
@@ -257,35 +275,52 @@ export default function EmployeeListContent() {
                       </td>
                       <td className='px-3 py-3 text-grey-600'>{employee.giftHistory.length}</td>
                       <td className='relative px-3 py-3'>
-                        <button onClick={() => setOpenMenu(openMenu === employee.id ? null : employee.id)} className='rounded p-1 text-grey-400 hover:bg-grey-100 hover:text-blackish'>
+                        <button
+                          onClick={(e) => {
+                            if (openMenu === employee.id) {
+                              setOpenMenu(null)
+                              setMenuPosition(null)
+                              return
+                            }
+                            const rect = e.currentTarget.getBoundingClientRect()
+                            setMenuPosition({ top: rect.bottom + 4, left: rect.right - MENU_WIDTH })
+                            setOpenMenu(employee.id)
+                          }}
+                          className='rounded p-1 text-grey-400 hover:bg-grey-100 hover:text-blackish'
+                        >
                           <svg width='16' height='16' viewBox='0 0 16 16' fill='none'>
                             <circle cx='8' cy='4' r='1' fill='currentColor' /><circle cx='8' cy='8' r='1' fill='currentColor' /><circle cx='8' cy='12' r='1' fill='currentColor' />
                           </svg>
                         </button>
-                        {openMenu === employee.id && (
-                          <div ref={menuRef} className='absolute right-4 top-full z-10 w-44 rounded-lg border border-grey-100 bg-white py-1 shadow-lg'>
+                        {openMenu === employee.id && menuPosition && createPortal(
+                          <div
+                            ref={menuRef}
+                            style={{ position: 'fixed', top: menuPosition.top, left: menuPosition.left, width: MENU_WIDTH }}
+                            className='z-50 rounded-lg border border-grey-100 bg-white py-1 shadow-lg'
+                          >
                             <button
-                              onClick={() => { setOpenMenu(null); setActiveEmployee(employee) }}
+                              onClick={() => { setOpenMenu(null); setMenuPosition(null); setActiveEmployee(employee) }}
                               className='flex w-full items-center gap-2 px-4 py-2.5 text-sm text-grey-600 hover:bg-grey-50 transition-colors'
                             >
                               <Eye className='h-4 w-4' />
                               View profile
                             </button>
                             <button
-                              onClick={() => { setOpenMenu(null); openSendGift([employee.id]) }}
+                              onClick={() => { setOpenMenu(null); setMenuPosition(null); openSendGift([employee.id]) }}
                               className='flex w-full items-center gap-2 px-4 py-2.5 text-sm text-grey-600 hover:bg-grey-50 transition-colors'
                             >
                               <Gift className='h-4 w-4' />
                               Send a gift
                             </button>
                             <button
-                              onClick={() => { setOpenMenu(null); setRemoveTargets([employee.id]) }}
+                              onClick={() => { setOpenMenu(null); setMenuPosition(null); setRemoveTargets([employee.id]) }}
                               className='flex w-full items-center gap-2 px-4 py-2.5 text-sm text-error-500 hover:bg-error-50 transition-colors'
                             >
                               <Trash2 className='h-4 w-4' />
                               Remove
                             </button>
-                          </div>
+                          </div>,
+                          document.body
                         )}
                       </td>
                     </tr>

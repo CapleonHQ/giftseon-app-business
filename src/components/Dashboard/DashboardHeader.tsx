@@ -54,7 +54,7 @@ export default function DashboardHeader({ title = 'Dashboard' }: { title?: strin
           </button>
 
           {dropdownOpen && (
-            <div className='absolute right-0 top-full mt-1 w-48 rounded-lg border border-grey-100 bg-white py-1 shadow-lg'>
+            <div className='absolute right-0 top-full z-30 mt-1 w-48 rounded-lg border border-grey-100 bg-white py-1 shadow-lg'>
               <a href='/settings' className='block px-4 py-2 text-sm text-grey-600 hover:bg-grey-50'>
                 Company Profile
               </a>
