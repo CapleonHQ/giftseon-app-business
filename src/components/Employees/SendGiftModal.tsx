@@ -49,6 +49,7 @@ export default function SendGiftModal({ open, onClose, initialEmployeeIds, initi
   const [customFormat, setCustomFormat] = useState<GiftFormat | ''>('')
   const [customBudget, setCustomBudget] = useState('')
   const [product, setProduct] = useState<MarketplaceProduct | null>(null)
+  const [quantity, setQuantity] = useState(1)
 
   const [occasionLabel, setOccasionLabel] = useState('Just Because')
   const [message, setMessage] = useState(branding.messageTemplate)
@@ -70,6 +71,7 @@ export default function SendGiftModal({ open, onClose, initialEmployeeIds, initi
     setCustomFormat('')
     setCustomBudget('')
     setProduct(null)
+    setQuantity(1)
     if (initialProductId) {
       getMarketplaceListing(initialProductId).then(setProduct).catch(() => setProduct(null))
     }
@@ -96,9 +98,17 @@ export default function SendGiftModal({ open, onClose, initialEmployeeIds, initi
   const costPerGift = useMemo(() => {
     if (giftSource === 'configuration') return selectedRule?.budget ?? 0
     if (giftSource === 'custom') return Number(customBudget) || 0
-    if (giftSource === 'marketplace') return product?.price ?? 0
+    if (giftSource === 'marketplace') return (product?.price ?? 0) * quantity
     return 0
-  }, [giftSource, selectedRule, customBudget, product])
+  }, [giftSource, selectedRule, customBudget, product, quantity])
+
+  const isPhysicalProduct = product?.giftOptionType === 'Physical Item' || product?.giftOptionType === 'Wholesale Pack'
+  const maxQuantity = isPhysicalProduct ? Math.max(product?.stockQuantity ?? 0, 1) : undefined
+
+  const selectProduct = (p: MarketplaceProduct) => {
+    setProduct(p)
+    setQuantity(1)
+  }
 
   const totalCost = costPerGift * recipients.length
 
@@ -127,6 +137,10 @@ export default function SendGiftModal({ open, onClose, initialEmployeeIds, initi
       if (giftSource === 'configuration' && !ruleId) { setError('Select a configured gifting type.'); return }
       if (giftSource === 'custom' && (!customFormat || !customBudget || Number(customBudget) <= 0)) { setError('Choose a gift format and enter a valid budget.'); return }
       if (giftSource === 'marketplace' && !product) { setError('Choose a product from the marketplace.'); return }
+      if (giftSource === 'marketplace' && isPhysicalProduct && (quantity < 1 || quantity > (maxQuantity ?? 1))) {
+        setError(`Enter a quantity between 1 and ${maxQuantity}.`)
+        return
+      }
     }
     if (step === 3 && !message.trim()) { setError('Write a message for the gift notification.'); return }
     setError('')
@@ -135,7 +149,11 @@ export default function SendGiftModal({ open, onClose, initialEmployeeIds, initi
 
   const goBack = () => { setError(''); setStep((s) => Math.max(1, s - 1)) }
 
-  const giftLabel = giftSource === 'configuration' ? (selectedRule?.label ?? 'Gift') : giftSource === 'marketplace' ? (product?.name ?? 'Gift') : (customFormat || 'Custom Gift')
+  const giftLabel = giftSource === 'configuration'
+    ? (selectedRule?.label ?? 'Gift')
+    : giftSource === 'marketplace'
+      ? (product ? (isPhysicalProduct && quantity > 1 ? `${quantity} × ${product.name}` : product.name) : 'Gift')
+      : (customFormat || 'Custom Gift')
 
   const resolvedFormat: GiftFormat = giftSource === 'configuration'
     ? (selectedRule?.giftFormat ?? 'Cash')
@@ -315,13 +333,46 @@ export default function SendGiftModal({ open, onClose, initialEmployeeIds, initi
               )}
 
               {giftSource === 'marketplace' && (
-                <ProductPicker
-                  selectedId={product?.id}
-                  onSelect={setProduct}
-                  recipientEmployee={recipients.length === 1 ? recipients[0] : null}
-                  company={company}
-                  occasionLabel={occasionLabel}
-                />
+                <div className='space-y-3'>
+                  <ProductPicker
+                    selectedId={product?.id}
+                    onSelect={selectProduct}
+                    recipientEmployee={recipients.length === 1 ? recipients[0] : null}
+                    company={company}
+                    occasionLabel={occasionLabel}
+                  />
+                  {product && isPhysicalProduct && (
+                    <div>
+                      <label className='mb-1.5 block text-sm font-medium text-grey-600'>
+                        Quantity per recipient <span className='text-grey-400'>({maxQuantity} in stock)</span>
+                      </label>
+                      <div className='flex items-center gap-2'>
+                        <button
+                          type='button'
+                          onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                          className='flex h-9 w-9 items-center justify-center rounded-lg border border-grey-200 text-sm font-medium text-grey-600 hover:bg-grey-50'
+                        >
+                          −
+                        </button>
+                        <input
+                          type='number'
+                          min={1}
+                          max={maxQuantity}
+                          value={quantity}
+                          onChange={(e) => setQuantity(Math.min(Math.max(1, Number(e.target.value) || 1), maxQuantity ?? 1))}
+                          className='form-input w-20 text-center'
+                        />
+                        <button
+                          type='button'
+                          onClick={() => setQuantity((q) => Math.min(maxQuantity ?? 1, q + 1))}
+                          className='flex h-9 w-9 items-center justify-center rounded-lg border border-grey-200 text-sm font-medium text-grey-600 hover:bg-grey-50'
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           )}

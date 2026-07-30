@@ -99,12 +99,18 @@ export default function MarketplaceContent() {
             </div>
           ) : (
             <div className='grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3'>
-              {filtered.map((product) => (
+              {filtered.map((product) => {
+                const isPhysical = product.giftOptionType === 'Physical Item' || product.giftOptionType === 'Wholesale Pack'
+                const outOfStock = isPhysical && (product.stockQuantity ?? 0) <= 0
+                return (
                 <div key={product.id} className='flex flex-col rounded-xl border border-grey-100 bg-white p-4'>
-                  <div className='flex items-start justify-between gap-2'>
-                    <div className='flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-50'>
-                      <Package className='h-5 w-5 text-primary-500' />
-                    </div>
+                  <div className='flex h-32 w-full items-center justify-center overflow-hidden rounded-lg bg-primary-50'>
+                    {product.images?.[0] ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={product.images[0]} alt={product.name} className='h-full w-full object-cover' />
+                    ) : (
+                      <Package className='h-8 w-8 text-primary-500' />
+                    )}
                   </div>
                   <p className='mt-3 text-sm font-semibold text-blackish'>{product.name}</p>
                   <p className='mt-1 flex-1 text-xs text-grey-500'>{product.description}</p>
@@ -112,6 +118,11 @@ export default function MarketplaceContent() {
                     <span className='rounded-full bg-grey-100 px-2 py-0.5 text-[11px] font-medium text-grey-600'>{product.giftOptionType}</span>
                     {product.corporateOnly && (
                       <span className='rounded-full bg-information-50 px-2 py-0.5 text-[11px] font-medium text-information-600'>Corporate</span>
+                    )}
+                    {isPhysical && (
+                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${outOfStock ? 'bg-error-50 text-error-500' : 'bg-success-50 text-success-600'}`}>
+                        {outOfStock ? 'Out of stock' : `${product.stockQuantity} in stock`}
+                      </span>
                     )}
                   </div>
                   <div className='mt-3 flex items-center justify-between'>
@@ -128,13 +139,15 @@ export default function MarketplaceContent() {
                   </div>
                   <button
                     onClick={() => setSendGiftProduct(product)}
-                    className='mt-3 flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-medium text-white transition-all'
+                    disabled={outOfStock}
+                    className='mt-3 flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-medium text-white transition-all disabled:cursor-not-allowed disabled:opacity-50'
                     style={{ background: 'linear-gradient(to bottom, var(--primary-400) 17.5%, var(--primary-600))' }}
                   >
                     <Gift className='h-3.5 w-3.5' /> Send as gift
                   </button>
                 </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>

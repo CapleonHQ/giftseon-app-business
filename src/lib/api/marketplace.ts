@@ -10,6 +10,7 @@ interface BackendListing {
   description: string
   unitPrice: number
   images: string[]
+  stockQuantity?: number
   occasionTags?: string[]
   departmentTags?: string[]
   corporateOnly: boolean
@@ -44,6 +45,8 @@ const toMarketplaceProduct = (listing: BackendListing): MarketplaceProduct => ({
   corporateOnly: listing.corporateOnly,
   rating: 0,
   deliveryEstimate: '',
+  images: listing.images ?? [],
+  stockQuantity: listing.stockQuantity ?? 0,
 })
 
 export interface MarketplaceQuery {

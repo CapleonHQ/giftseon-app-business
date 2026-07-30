@@ -20,4 +20,6 @@ export interface MarketplaceProduct {
   corporateOnly: boolean
   rating: number
   deliveryEstimate: string
+  images?: string[]
+  stockQuantity?: number
 }
